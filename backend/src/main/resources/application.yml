@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: medisphere
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/medisphere}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: medisphere-vitals
+      auto-offset-reset: earliest
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: always
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+medisphere:
+  jwt-secret: ${JWT_SECRET:medisphere-development-secret-change-this-to-a-long-random-value-please}
+  jwt-expiration-ms: 86400000
+  kafka-topic: medisphere.vitals
