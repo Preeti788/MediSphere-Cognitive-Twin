@@ -1264,38 +1264,11 @@ import { Router } from '@angular/router';
         <!-- AI RISK -->
         <!-- ================================================= -->
 
-        <div
-          *ngIf="risk"
-          class="panel risk">
-
-          <h3>
-            AI Risk Explanation
-          </h3>
-
-
-          <b>
-
-            {{risk.level}}
-            ·
-            {{risk.score}}/100
-
-          </b>
-
-
-          <p>
-
-            {{risk.explanations?.join(' · ')
-            || 'No major factors detected'}}
-
-          </p>
-
-
-          <small>
-
-            {{risk.note}}
-
-          </small>
-
+        <div *ngIf="risk" class="panel risk">
+          <h3>AI Risk Summary</h3>
+          <div class="risk-summary-line"><b>Cardiovascular: {{risk.cardiovascularLevel}} · {{risk.cardiovascularScore}}/100</b><b>Diabetes: {{risk.diabetesLevel}} · {{risk.diabetesScore}}/100</b></div>
+          <p>Top factors: {{risk.cardiovascularFactors?.[0]?.feature || 'No major factors detected'}}</p>
+          <small>Open <b>AI Risk Lab</b> for feature-level explanations and federated-learning simulation.</small>
         </div>
 
 
@@ -1303,6 +1276,91 @@ import { Router } from '@angular/router';
 
     </section>
 
+
+    <!-- ================================================= -->
+    <!-- MILESTONE 2: AI RISK LAB -->
+    <!-- ================================================= -->
+
+    <section *ngIf="tab==='aiRisk'" class="content">
+      <div class="hero ai-hero">
+        <div>
+          <span class="eyebrow">MILESTONE 2 · AI RISK PREDICTION</span>
+          <h2>Explainable patient risk intelligence.</h2>
+          <p>Cardiovascular and diabetes complication risk with transparent feature contributions and a privacy-first federated-learning demonstration.</p>
+        </div>
+        <div class="hero-icon">✦</div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-head">
+          <h3>Run AI assessment</h3>
+          <span class="pill">Model M2.0</span>
+        </div>
+        <div class="ai-controls">
+          <select [(ngModel)]="aiPatientId">
+            <option value="">Select patient</option>
+            <option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option>
+          </select>
+          <button class="primary" (click)="runRisk(aiPatientId)" [disabled]="!aiPatientId">Run prediction</button>
+          <button (click)="loadFederated()">Run federated demo</button>
+        </div>
+        <small class="muted">Decision-support demonstration only — not a medical diagnosis.</small>
+      </div>
+
+      <div *ngIf="risk" class="ai-risk-grid">
+        <div class="risk-score-card">
+          <span>Cardiovascular risk</span>
+          <strong>{{risk.cardiovascularScore}}<small>/100</small></strong>
+          <b [class.high]="risk.cardiovascularLevel==='HIGH'" [class.moderate]="risk.cardiovascularLevel==='MODERATE'">{{risk.cardiovascularLevel}}</b>
+        </div>
+        <div class="risk-score-card">
+          <span>Diabetes complications</span>
+          <strong>{{risk.diabetesScore}}<small>/100</small></strong>
+          <b [class.high]="risk.diabetesLevel==='HIGH'" [class.moderate]="risk.diabetesLevel==='MODERATE'">{{risk.diabetesLevel}}</b>
+        </div>
+      </div>
+
+      <div *ngIf="risk" class="grid2">
+        <div class="panel">
+          <h3>SHAP-style explanation · cardiovascular</h3>
+          <div *ngFor="let f of risk.cardiovascularFactors" class="factor-row">
+            <div><b>{{f.feature}}</b><small>{{f.value}} {{f.unit}}</small></div>
+            <span [class.down]="f.direction==='LOWERS_RISK'">{{f.contribution > 0 ? '+' : ''}}{{f.contribution}}</span>
+          </div>
+          <div *ngIf="!risk.cardiovascularFactors?.length" class="empty-small">No current features available.</div>
+        </div>
+        <div class="panel">
+          <h3>SHAP-style explanation · diabetes</h3>
+          <div *ngFor="let f of risk.diabetesFactors" class="factor-row">
+            <div><b>{{f.feature}}</b><small>{{f.value}} {{f.unit}}</small></div>
+            <span [class.down]="f.direction==='LOWERS_RISK'">{{f.contribution > 0 ? '+' : ''}}{{f.contribution}}</span>
+          </div>
+          <div *ngIf="!risk.diabetesFactors?.length" class="empty-small">No current features available.</div>
+        </div>
+      </div>
+
+      <div *ngIf="risk" class="panel privacy-panel">
+        <h3>Federated learning & privacy</h3>
+        <p>{{risk.privacy}}</p>
+        <span class="pill">{{risk.method}}</span>
+      </div>
+
+      <div *ngIf="federated" class="panel federated-panel">
+        <div class="panel-head"><h3>Federated training simulation</h3><span class="pill">{{federated.status}}</span></div>
+        <div class="federated-grid">
+          <div *ngFor="let h of federated.hospitals" class="hospital-card">
+            <b>{{h.hospital}}</b><span>{{h.samples}} samples</span><strong>{{h.localModelWeight}}</strong><small>Data shared: {{h.dataShared ? 'Yes' : 'No'}}</small>
+          </div>
+        </div>
+        <div class="aggregate">Aggregated model weight: <b>{{federated.aggregatedModelWeight}}</b></div>
+        <p>{{federated.privacy}}</p>
+      </div>
+
+      <div *ngIf="riskHistory?.length" class="panel">
+        <h3>Recent risk assessments</h3>
+        <div *ngFor="let r of riskHistory" class="history-row"><span>{{r.assessedAt | date:'medium'}}</span><b>CV {{r.cardiovascularScore}} · Diabetes {{r.diabetesScore}}</b><span>{{r.cardiovascularLevel}} / {{r.diabetesLevel}}</span></div>
+      </div>
+    </section>
 
     <!-- ================================================= -->
     <!-- APPOINTMENTS -->
@@ -2152,6 +2210,7 @@ td small{
 .risk b{
   color:#0b8f7b;
 }
+.risk-summary-line{display:flex;gap:18px;flex-wrap:wrap}.risk-summary-line b{color:#0b8f7b}
 
 .severity{
   font-size:10px;
@@ -2380,6 +2439,9 @@ pre{
 }
 
 
+
+.ai-hero{margin-bottom:16px}.ai-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.ai-controls select{min-width:260px;padding:11px;border:1px solid #d9e5eb;border-radius:8px;background:white}.primary{background:#0b8f7b!important;color:white!important;border-color:#0b8f7b!important}.muted{display:block;margin-top:10px;color:#72828b}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.ai-risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}.risk-score-card{background:white;border:1px solid #dce8ed;border-radius:14px;padding:20px;box-shadow:0 5px 18px rgba(24,55,72,.05)}.risk-score-card span{display:block;color:#71808a;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.risk-score-card strong{display:block;font-size:42px;margin:8px 0;color:#163b49}.risk-score-card strong small{font-size:15px;color:#87939a}.risk-score-card b{display:inline-block;background:#e7f7f3;color:#087b6d;border-radius:20px;padding:6px 10px;font-size:11px}.risk-score-card b.moderate{background:#fff2d8;color:#9b6200}.risk-score-card b.high{background:#ffe3e0;color:#a62318}.factor-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #edf2f4}.factor-row:last-child{border-bottom:0}.factor-row b{display:block}.factor-row small{display:block;color:#80909a;margin-top:3px}.factor-row>span{font-weight:800;color:#a62318}.factor-row>span.down{color:#0b8f7b}.privacy-panel{margin-top:16px}.federated-panel{margin-top:16px}.federated-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}.hospital-card{border:1px solid #dce8ed;border-radius:12px;padding:14px;background:#fbfdfd}.hospital-card span,.hospital-card small{display:block;color:#75858e;margin-top:5px}.hospital-card strong{display:block;font-size:24px;margin-top:8px}.aggregate{padding:12px;background:#edf7f5;border-radius:10px}.history-row{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;padding:11px 0;border-bottom:1px solid #edf2f4;font-size:12px}.history-row:last-child{border-bottom:0}
+
 @media(max-width:600px){
 
   .cards,
@@ -2464,6 +2526,9 @@ export class ShellComponent {
 
 
   risk: any = null;
+  riskHistory: any[] = [];
+  federated: any = null;
+  aiPatientId = '';
 
 
   // =====================================================
@@ -2502,6 +2567,12 @@ export class ShellComponent {
       id: 'patient360',
       label: 'Patient 360',
       icon: '◎'
+    },
+
+    {
+      id: 'aiRisk',
+      label: 'AI Risk Lab',
+      icon: '✦'
     },
 
     {
@@ -2781,23 +2852,17 @@ export class ShellComponent {
   // =====================================================
 
   runRisk(id: string) {
+    if (!id) return;
+    this.aiPatientId = id;
+    this.api.post<any>('/ai/risk/' + id, {}).subscribe(x => {
+      this.risk = x;
+      this.api.get<any[]>('/ai/risk/' + id + '/history').subscribe(h => this.riskHistory = h);
+      this.tab = 'aiRisk';
+    });
+  }
 
-    this.api
-      .post<any>(
-        '/ai/risk/' +
-        id,
-        {}
-      )
-      .subscribe(
-
-        x => {
-
-          this.risk = x;
-
-        }
-
-      );
-
+  loadFederated() {
+    this.api.get<any>('/ai/federated-demo').subscribe(x => { this.federated = x; this.tab = 'aiRisk'; });
   }
 
 

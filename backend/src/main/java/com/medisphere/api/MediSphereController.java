@@ -1,6 +1,8 @@
 package com.medisphere.api;
 
 import com.medisphere.model.Models.*;
+import com.medisphere.model.RiskModels.RiskAssessment;
+import com.medisphere.ai.AiRiskService;
 import com.medisphere.repo.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -15,13 +17,13 @@ public class MediSphereController {
     private final PatientRepo patients; private final VitalRepo vitals; private final LabRepo labs;
     private final AppointmentRepo appointments; private final ConsentRepo consents; private final AlertRepo alerts;
     private final CarePlanRepo carePlans; private final MedicineRepo medicines; private final UserRepo users; private final AuditRepo audit;
-    private final KafkaTemplate<String,Object> kafka; private final String topic;
+    private final KafkaTemplate<String,Object> kafka; private final String topic; private final AiRiskService aiRisk;
 
     public MediSphereController(PatientRepo patients,VitalRepo vitals,LabRepo labs,AppointmentRepo appointments,
       ConsentRepo consents,AlertRepo alerts,CarePlanRepo carePlans,MedicineRepo medicines,UserRepo users,
-      AuditRepo audit,KafkaTemplate<String,Object> kafka,@Value("${medisphere.kafka-topic}") String topic){
+      AuditRepo audit,KafkaTemplate<String,Object> kafka,@Value("${medisphere.kafka-topic}") String topic, AiRiskService aiRisk){
       this.patients=patients;this.vitals=vitals;this.labs=labs;this.appointments=appointments;this.consents=consents;
-      this.alerts=alerts;this.carePlans=carePlans;this.medicines=medicines;this.users=users;this.audit=audit;this.kafka=kafka;this.topic=topic;
+      this.alerts=alerts;this.carePlans=carePlans;this.medicines=medicines;this.users=users;this.audit=audit;this.kafka=kafka;this.topic=topic;this.aiRisk=aiRisk;
     }
 
     @GetMapping("/dashboard")
@@ -80,20 +82,13 @@ public class MediSphereController {
     @GetMapping("/users") @PreAuthorize("hasRole('ADMIN')") public List<User> users(){return users.findAll().stream().peek(u->u.password=null).toList();}
 
     @PostMapping("/ai/risk/{patientId}")
-    public Map<String,Object> risk(@PathVariable String patientId){
-      var vs=vitals.findTop20ByPatientIdOrderByRecordedAtDesc(patientId);
-      double score=0; List<String> factors=new ArrayList<>();
-      if(!vs.isEmpty()){
-        var v=vs.get(0);
-        if(v.heartRate!=null && v.heartRate>100){score+=25;factors.add("Elevated heart rate");}
-        if(v.systolic!=null && v.systolic>140){score+=30;factors.add("Elevated systolic blood pressure");}
-        if(v.oxygen!=null && v.oxygen<95){score+=30;factors.add("Reduced oxygen saturation");}
-        if(v.glucose!=null && v.glucose>140){score+=15;factors.add("Elevated glucose");}
-      }
-      String level=score>=60?"HIGH":score>=30?"MODERATE":"LOW";
-      return Map.of("patientId",patientId,"riskType","CARDIOVASCULAR_DEMO","score",Math.min(score,100),"level",level,
-        "explanations",factors,"note","Demo explainable risk engine; not a clinical diagnosis.");
-    }
+    public RiskAssessment risk(@PathVariable String patientId){ return aiRisk.assess(patientId); }
+
+    @GetMapping("/ai/risk/{patientId}/history")
+    public List<RiskAssessment> riskHistory(@PathVariable String patientId){ return aiRisk.history(patientId); }
+
+    @GetMapping("/ai/federated-demo")
+    public Map<String,Object> federatedDemo(){ return aiRisk.federatedDemo(); }
 
     @GetMapping("/smart/authorize") public Map<String,Object> smartAuthorize(@RequestParam String client_id,@RequestParam String redirect_uri){
       return Map.of("client_id",client_id,"redirect_uri",redirect_uri,"scope","patient/*.read openid fhirUser",

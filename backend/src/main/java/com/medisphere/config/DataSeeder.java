@@ -19,11 +19,11 @@ public class DataSeeder {
           user("Priya Nurse","nurse@medisphere.local","NURSE","Nurse@123",encoder),
           user("Rahul Reception","reception@medisphere.local","RECEPTIONIST","Reception@123",encoder),
           user("Neha Pharmacist","pharmacist@medisphere.local","PHARMACIST","Pharmacy@123",encoder),
-          user("Demo Patient","patient@medisphere.local","PATIENT","Patient@123",encoder)
+          user("Rahul Kumar","patient@medisphere.local","PATIENT","Patient@123",encoder)
         ));
       }
       if(patients.count()==0){
-        Patient p=new Patient();p.mrn="MS-10001";p.name="Demo Patient";p.gender="Male";p.dateOfBirth="1998-04-12";
+        Patient p=new Patient();p.mrn="MS-10001";p.name="Rahul Kumar";p.gender="Male";p.dateOfBirth="1998-04-12";
         p.phone="+91 98765 43210";p.email="patient@medisphere.local";p.bloodGroup="O+";
         p.conditions=List.of("Hypertension");p.allergies=List.of("Penicillin");patients.save(p);
         Vital v=new Vital();v.patientId=p.id;v.heartRate=85.0;v.systolic=120.0;v.diastolic=80.0;v.oxygen=98.0;v.temperature=36.8;v.glucose=104.0;v.source="WEARABLE";vitals.save(v);
