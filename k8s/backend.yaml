@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: medisphere-backend}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: medisphere-backend}}
+  template:
+    metadata: {labels: {app: medisphere-backend}}
+    spec:
+      containers:
+      - name: backend
+        image: medisphere/backend:1.0
+        env:
+        - {name: MONGODB_URI, value: mongodb://medisphere-mongodb:27017/medisphere}
+        - {name: KAFKA_BOOTSTRAP_SERVERS, value: medisphere-kafka:9092}
+        ports: [{containerPort: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: medisphere-backend}
+spec:
+  selector: {app: medisphere-backend}
+  ports: [{port: 8080,targetPort: 8080}]
