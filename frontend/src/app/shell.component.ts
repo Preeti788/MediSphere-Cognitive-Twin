@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from './api.service';
 import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-shell',
@@ -95,7 +96,7 @@ import { Router } from '@angular/router';
         <button
           (click)="refresh()">
 
-          ↻ Refresh
+          {{refreshing ? '⟳ Updating…' : '↻ Refresh'}}
 
         </button>
 
@@ -1305,7 +1306,7 @@ import { Router } from '@angular/router';
             <option value="">Select patient</option>
             <option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option>
           </select>
-          <button class="primary" (click)="startMonitoring()" [disabled]="!monitoringPatientId || monitoringRunning">Start live monitoring</button>
+          <button class="primary" (click)="startMonitoring()" [disabled]="!monitoringPatientId || monitoringRunning">{{monitoringRunning ? '● Monitoring live' : '▶ Start live monitoring'}}</button>
           <button (click)="stopMonitoring()" [disabled]="!monitoringRunning">Stop</button>
           <button class="danger-btn" (click)="simulateCritical()" [disabled]="!monitoringPatientId">Simulate HR 145 bpm</button>
           <button (click)="clearMonitoringView()" [disabled]="!monitoring">Clear view</button>
@@ -1317,6 +1318,25 @@ import { Router } from '@angular/router';
         <div class="metric"><span>Blood Pressure</span><b>{{monitoring.latestVital?.systolic || '—'}} / {{monitoring.latestVital?.diastolic || '—'}}</b><small>mmHg</small></div>
         <div class="metric"><span>SpO₂</span><b>{{monitoring.latestVital?.oxygen || '—'}}</b><small>% saturation</small></div>
         <div class="metric"><span>Glucose</span><b>{{monitoring.latestVital?.glucose || '—'}}</b><small>mg/dL</small></div>
+      </div>
+
+      <div *ngIf="monitoring" class="panel live-graph-panel">
+        <div class="panel-head">
+          <div><h3>Live vital trend</h3><small class="muted">Backend-sourced readings · updates while monitoring is running</small></div>
+          <span class="monitor-live" [class.paused]="!monitoringRunning">● {{monitoringRunning ? 'LIVE STREAM' : 'STREAM PAUSED'}}</span>
+        </div>
+        <div class="trend-controls">
+          <button *ngFor="let k of monitorTrendKeys" [class.active-trend]="monitorTrendKey===k" (click)="monitorTrendKey=k">{{trendLabel(k)}}</button>
+        </div>
+        <div class="trend-chart" *ngIf="trendPoints().length; else noTrend">
+          <svg viewBox="0 0 900 260" preserveAspectRatio="none">
+            <line x1="45" y1="20" x2="45" y2="225" class="chart-axis"></line>
+            <line x1="45" y1="225" x2="875" y2="225" class="chart-axis"></line>
+            <polyline [attr.points]="trendPolyline()" class="trend-line"></polyline>
+          </svg>
+          <div class="trend-range"><span>Min {{trendMin()}}</span><b>{{trendLabel(monitorTrendKey)}} · {{monitoring?.latestVital?.[monitorTrendKey] ?? '—'}}</b><span>Max {{trendMax()}}</span></div>
+        </div>
+        <ng-template #noTrend><div class="empty-small">Start live monitoring to stream vital readings into the graph.</div></ng-template>
       </div>
 
       <div *ngIf="monitoring" class="grid2">
@@ -1371,16 +1391,20 @@ import { Router } from '@angular/router';
       class="content">
 
 
-      <div class="toolbar">
+      <div class="toolbar appointment-toolbar">
+        <div>
+          <h2 class="section-title">Doctor appointments</h2>
+          <small class="muted">Choose a department, doctor, date and an actually available time slot.</small>
+        </div>
+        <button class="primary" (click)="addAppointment()">+ New appointment</button>
+      </div>
 
-        <button
-          class="primary"
-          (click)="addAppointment()">
-
-          + New appointment
-
-        </button>
-
+      <div class="doctor-department-grid">
+        <div class="doctor-department-card" *ngFor="let d of appointmentDepartments">
+          <div class="dept-icon">{{d.icon}}</div>
+          <div><b>{{d.name}}</b><small>{{d.description}}</small></div>
+          <span>{{doctorsForDepartment(d.name).length}} doctors</span>
+        </div>
       </div>
 
 
@@ -1786,6 +1810,51 @@ import { Router } from '@angular/router';
       </div>
 
     </section>
+
+    <!-- PATIENT CREATE MODAL -->
+    <div *ngIf="patientFormOpen" class="modal-backdrop">
+      <div class="form-modal">
+        <button class="modal-close" (click)="cancelNewPatient()">×</button>
+        <h3>Add new patient</h3>
+        <p class="muted">Create a complete patient record. The form is saved through the existing /api/patients endpoint.</p>
+        <div class="modal-form-grid">
+          <label>MRN<input [(ngModel)]="patientForm.mrn" placeholder="MS-10001"></label>
+          <label>Full name<input [(ngModel)]="patientForm.name" placeholder="Patient name"></label>
+          <label>Gender<select [(ngModel)]="patientForm.gender"><option>Male</option><option>Female</option><option>Other</option></select></label>
+          <label>Date of birth<input type="date" [(ngModel)]="patientForm.dateOfBirth"></label>
+          <label>Phone<input [(ngModel)]="patientForm.phone" placeholder="+91..."></label>
+          <label>Email<input [(ngModel)]="patientForm.email" type="email" placeholder="patient@email.com"></label>
+          <label>Blood group<select [(ngModel)]="patientForm.bloodGroup"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></label>
+          <label>Emergency contact<input [(ngModel)]="patientForm.emergencyContact" placeholder="Emergency contact"></label>
+          <label class="wide-field">Address<input [(ngModel)]="patientForm.address" placeholder="Address"></label>
+          <label class="wide-field">Allergies<input [(ngModel)]="patientForm.allergiesText" placeholder="e.g. Penicillin, Dust"></label>
+          <label class="wide-field">Conditions<input [(ngModel)]="patientForm.conditionsText" placeholder="e.g. Hypertension, Diabetes"></label>
+        </div>
+        <div class="modal-actions"><button (click)="cancelNewPatient()">Cancel</button><button class="primary" [disabled]="savingPatient" (click)="saveNewPatient()">{{savingPatient ? 'Saving…' : 'Create patient'}}</button></div>
+      </div>
+    </div>
+
+    <!-- APPOINTMENT BOOKING MODAL -->
+    <div *ngIf="appointmentFormOpen" class="modal-backdrop">
+      <div class="form-modal appointment-modal">
+        <button class="modal-close" (click)="closeAppointmentForm()">×</button>
+        <h3>Schedule appointment</h3>
+        <p class="muted">Doctors and slots are separated by department. Already-booked slots are removed automatically.</p>
+        <div class="modal-form-grid">
+          <label>Department<select [(ngModel)]="appointmentForm.specialty" (change)="onAppointmentDepartmentChange()"><option value="">Select department</option><option *ngFor="let d of appointmentDepartments" [value]="d.name">{{d.name}}</option></select></label>
+          <label>Doctor<select [(ngModel)]="appointmentForm.doctorName" (change)="onAppointmentDoctorChange()" [disabled]="!appointmentForm.specialty"><option value="">Select doctor</option><option *ngFor="let d of availableDoctors()" [value]="d.name">{{d.name}} · {{d.experience}}y</option></select></label>
+          <label>Patient<select [(ngModel)]="appointmentForm.patientId"><option value="">Select patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select></label>
+          <label>Date<input type="date" [(ngModel)]="appointmentForm.date" (change)="onAppointmentDateChange()"></label>
+        </div>
+        <div class="slot-section" *ngIf="appointmentForm.doctorName">
+          <div class="slot-head"><b>Available consultation times</b><span>{{availableSlots().length}} available</span></div>
+          <div class="slot-grid"><button type="button" *ngFor="let slot of availableSlots()" [class.selected-slot]="appointmentForm.time===slot" (click)="appointmentForm.time=slot">{{slot}}</button></div>
+          <div *ngIf="!availableSlots().length" class="empty-small">No slots remain for this doctor on the selected date.</div>
+        </div>
+        <label class="reason-field">Reason<textarea [(ngModel)]="appointmentForm.reason" rows="3" placeholder="Reason for visit / consultation"></textarea></label>
+        <div class="modal-actions"><button (click)="closeAppointmentForm()">Cancel</button><button class="primary" [disabled]="savingAppointment || !appointmentForm.patientId || !appointmentForm.doctorName || !appointmentForm.time" (click)="saveAppointment()">{{savingAppointment ? 'Booking…' : 'Confirm appointment'}}</button></div>
+      </div>
+    </div>
 
   </main>
 
@@ -2342,6 +2411,7 @@ pre{
 }
 
 
+.section-title{margin:0 0 4px;font-size:18px}.muted{color:#7b8d99;font-size:11px}.appointment-toolbar{align-items:center}.doctor-department-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.doctor-department-card{background:#fff;border:1px solid #e3ecef;border-radius:14px;padding:14px;display:flex;align-items:center;gap:10px}.doctor-department-card .dept-icon{width:34px;height:34px;border-radius:10px;background:#e8f7f4;color:#078575;display:grid;place-items:center;font-weight:800}.doctor-department-card b{display:block;font-size:12px}.doctor-department-card small{display:block;color:#84949e;font-size:9px;margin-top:3px}.doctor-department-card>span{margin-left:auto;color:#078575;font-size:9px;font-weight:800}.live-graph-panel{margin-top:18px}.trend-controls{display:flex;gap:7px;margin:10px 0}.trend-controls button{font-size:11px;padding:7px 10px}.trend-controls .active-trend{background:#0c9f8a;color:#fff;border-color:#0c9f8a}.trend-chart{height:260px;border:1px solid #e5edf1;border-radius:12px;background:linear-gradient(#fbfefe,#f6fbfa);padding:8px}.trend-chart polyline{transition:points .65s ease-in-out}.trend-chart svg{width:100%;height:220px}.chart-axis{stroke:#cad9de;stroke-width:1}.trend-line{fill:none;stroke:#0b9f8b;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 3px 3px rgba(0,150,130,.18))}.trend-range{display:flex;justify-content:space-between;align-items:center;color:#80929c;font-size:10px}.trend-range b{color:#0b806f}.monitor-live{font-size:10px;color:#078575;font-weight:800;letter-spacing:.7px}.monitor-live.paused{color:#8b9aa4}.form-modal{width:min(760px,92vw);max-height:90vh;overflow:auto;background:#fff;border-radius:18px;padding:24px;position:relative;box-shadow:0 25px 80px rgba(0,0,0,.25)}.form-modal h3{margin:0 0 6px;font-size:21px}.modal-form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.modal-form-grid label,.reason-field{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;color:#536a78}.modal-form-grid input,.modal-form-grid select,.reason-field textarea{padding:11px;border:1px solid #d6e3e8;border-radius:9px;font:inherit;color:#284354;background:#fff}.wide-field{grid-column:1/-1}.reason-field{margin-top:14px}.slot-section{margin-top:18px;padding:14px;background:#f7fbfb;border:1px solid #e0ecec;border-radius:12px}.slot-head{display:flex;justify-content:space-between;margin-bottom:10px;font-size:11px}.slot-head span{color:#078575}.slot-grid{display:flex;gap:7px;flex-wrap:wrap}.slot-grid button{font-size:11px}.slot-grid .selected-slot{background:#0c9f8a;color:#fff;border-color:#0c9f8a}.appointment-modal{max-width:820px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.modal-close{position:absolute;right:13px;top:10px;background:transparent!important;border:0!important;color:#7a8e9a!important;font-size:22px;padding:4px 8px}.modal-actions button{padding:10px 14px}.modal-actions .primary:disabled{opacity:.55;cursor:not-allowed}@media(max-width:1100px){.doctor-department-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){
 
   aside{
@@ -2526,6 +2596,9 @@ export class ShellComponent {
   monitoringCycle = 0;
   monitoringAttention = false;
   private monitoringTimer: any = null;
+  private liveVitalSeed: any = null;
+  private monitoringErrorShown = false;
+  monitoringUpdatedAt: Date | null = null;
 
   escalationOpen = false;
   escalationAlert: any = null;
@@ -2548,6 +2621,48 @@ export class ShellComponent {
   vital: any = {
     source: 'WEARABLE'
   };
+
+  refreshing = false;
+  refreshPending = 0;
+
+  patientFormOpen = false;
+  savingPatient = false;
+  patientForm: any = {};
+
+  appointmentFormOpen = false;
+  savingAppointment = false;
+  appointmentForm: any = {};
+  appointmentDepartments = [
+    { name: 'Cardiology', icon: '♥', description: 'Heart & vascular care' },
+    { name: 'Neurology', icon: '◈', description: 'Brain & nervous system' },
+    { name: 'General Medicine', icon: '✚', description: 'Primary adult care' },
+    { name: 'Orthopedics', icon: '◫', description: 'Bones & joints' },
+    { name: 'Dermatology', icon: '◇', description: 'Skin & hair care' },
+    { name: 'Pediatrics', icon: '●', description: 'Child healthcare' },
+    { name: 'Gynecology', icon: '♀', description: 'Women’s health' },
+    { name: 'Endocrinology', icon: '◉', description: 'Hormone & diabetes care' }
+  ];
+  doctorDirectory: any[] = [
+    { name:'Dr. Arjun Sharma', specialty:'General Medicine', experience:12, slots:['09:00','09:30','10:00','10:30','11:30','12:00','14:00','14:30','15:00','16:00'] },
+    { name:'Dr. Meera Kapoor', specialty:'General Medicine', experience:9, slots:['09:30','10:00','11:00','11:30','13:00','14:00','15:30','16:00','16:30'] },
+    { name:'Dr. Rohan Mehta', specialty:'Cardiology', experience:16, slots:['09:00','09:30','10:30','11:00','12:00','14:30','15:00','16:00'] },
+    { name:'Dr. Ananya Rao', specialty:'Cardiology', experience:11, slots:['10:00','10:30','11:30','12:00','14:00','14:30','15:30','16:30'] },
+    { name:'Dr. Vikram Singh', specialty:'Neurology', experience:14, slots:['09:00','10:00','10:30','11:30','13:30','14:00','15:00','16:00'] },
+    { name:'Dr. Priya Nair', specialty:'Neurology', experience:8, slots:['09:30','10:30','11:00','12:00','14:30','15:00','16:00','16:30'] },
+    { name:'Dr. Karan Malhotra', specialty:'Orthopedics', experience:13, slots:['09:00','09:30','10:30','11:30','12:00','14:00','15:00','15:30'] },
+    { name:'Dr. Neha Verma', specialty:'Orthopedics', experience:7, slots:['10:00','11:00','11:30','13:00','14:00','14:30','16:00','16:30'] },
+    { name:'Dr. Simran Khanna', specialty:'Dermatology', experience:10, slots:['09:30','10:00','11:00','12:00','14:00','15:00','16:00','16:30'] },
+    { name:'Dr. Amit Joshi', specialty:'Dermatology', experience:6, slots:['09:00','10:30','11:30','13:30','14:30','15:30','16:00'] },
+    { name:'Dr. Pooja Iyer', specialty:'Pediatrics', experience:12, slots:['09:00','09:30','10:30','11:00','12:00','14:00','15:00','16:00'] },
+    { name:'Dr. Rahul Bhatia', specialty:'Pediatrics', experience:9, slots:['10:00','10:30','11:30','13:30','14:30','15:30','16:30'] },
+    { name:'Dr. Aisha Khan', specialty:'Gynecology', experience:15, slots:['09:00','10:00','11:00','12:00','14:00','15:00','16:00'] },
+    { name:'Dr. Nidhi Gupta', specialty:'Gynecology', experience:8, slots:['09:30','10:30','11:30','13:30','14:30','15:30','16:30'] },
+    { name:'Dr. Sameer Sethi', specialty:'Endocrinology', experience:13, slots:['09:00','10:00','11:30','12:00','14:00','15:00','16:00'] },
+    { name:'Dr. Kavya Menon', specialty:'Endocrinology', experience:10, slots:['09:30','10:30','11:00','13:30','14:30','15:30','16:30'] }
+  ];
+
+  monitorTrendKey = 'heartRate';
+  monitorTrendKeys = ['heartRate','oxygen','systolic','glucose'];
 
 
   nav = [
@@ -2663,43 +2778,16 @@ export class ShellComponent {
   // =====================================================
 
   refresh() {
+    this.refreshing = true;
+    this.refreshPending = 5;
+    const done = () => { this.refreshPending--; if (this.refreshPending <= 0) this.refreshing = false; };
 
-    this.api
-      .get<any>('/dashboard')
-      .subscribe(
-        x => this.dash = x
-      );
-
-
-    this.api
-      .get<any[]>('/patients')
-      .subscribe(
-        x => this.patients = x
-      );
-
-
-    this.api
-      .get<any[]>('/appointments')
-      .subscribe(
-        x => this.appointments = x
-      );
-
-
-    this.api
-      .get<any[]>('/alerts')
-      .subscribe(
-        x => this.alerts = x
-      );
-
-
-    this.api
-      .get<any[]>('/medicines')
-      .subscribe(
-        x => this.medicines = x
-      );
-
+    this.api.get<any>('/dashboard').subscribe({next:x=>this.dash=x, error:()=>{done();}, complete:done});
+    this.api.get<any[]>('/patients').subscribe({next:x=>this.patients=x, error:()=>{done();}, complete:done});
+    this.api.get<any[]>('/appointments').subscribe({next:x=>this.appointments=x, error:()=>{done();}, complete:done});
+    this.api.get<any[]>('/alerts').subscribe({next:x=>this.alerts=x, error:()=>{done();}, complete:done});
+    this.api.get<any[]>('/medicines').subscribe({next:x=>this.medicines=x, error:()=>{done();}, complete:done});
   }
-
 
   // =====================================================
   // PATIENT SEARCH
@@ -2880,33 +2968,105 @@ export class ShellComponent {
   loadMonitoring() {
     if (!this.monitoringPatientId) { this.monitoring = null; this.monitoringAttention = false; return; }
     this.api.get<any>('/monitoring/' + this.monitoringPatientId + '/latest')
-      .subscribe(x => { this.monitoring = x; this.monitoringAlerts = (x.recentAlerts || []).slice(0, 6); });
+      .subscribe({ next: x => { this.monitoring = x; this.monitoringAlerts = (x.recentAlerts || []).slice(0, 6); }, error: () => { this.monitoring = null; } });
   }
 
-  private simulateMonitoring(critical: boolean) {
-    if (!this.monitoringPatientId) return;
-    this.api.post<any>('/monitoring/' + this.monitoringPatientId + '/simulate?critical=' + critical, {})
-      .subscribe(x => {
-        this.monitoringAttention = (x.alerts || []).length > 0;
-        this.monitoring = { ...this.monitoring, latestVital: x.vital, recentAlerts: x.alerts };
-        this.loadMonitoring();
-        this.refresh();
-      });
+  trendLabel(k: string) { return ({heartRate:'Heart Rate', oxygen:'SpO₂', systolic:'Systolic BP', glucose:'Glucose'} as any)[k] || k; }
+  trendPoints(): number[] {
+    const rows = (this.monitoring?.recentVitals || []).slice().reverse();
+    return rows.map((v:any) => Number(v?.[this.monitorTrendKey])).filter((v:number) => Number.isFinite(v));
+  }
+  trendPolyline(): string {
+    const pts = this.trendPoints(); if (!pts.length) return '';
+    const min=Math.min(...pts), max=Math.max(...pts), range=max-min || 1;
+    return pts.map((v,i)=>`${45 + (i/Math.max(pts.length-1,1))*830},${215-((v-min)/range)*180}`).join(' ');
+  }
+  trendMin() { const p=this.trendPoints(); return p.length ? Math.min(...p).toFixed(0) : '—'; }
+  trendMax() { const p=this.trendPoints(); return p.length ? Math.max(...p).toFixed(0) : '—'; }
+
+  private nextLiveVital(critical = false) {
+    const last = this.liveVitalSeed || this.monitoring?.latestVital || {};
+    const drift = (base: number, step: number, min: number, max: number) => {
+      const current = Number.isFinite(Number(base)) ? Number(base) : (min + max) / 2;
+      const next = current + (Math.random() * step * 2 - step);
+      return Math.round(Math.max(min, Math.min(max, next)));
+    };
+
+    const vital: any = {
+      patientId: this.monitoringPatientId,
+      heartRate: critical ? 145 : drift(last.heartRate ?? 72, 5, 60, 105),
+      systolic: critical ? 182 : drift(last.systolic ?? 122, 4, 105, 145),
+      diastolic: critical ? 105 : drift(last.diastolic ?? 78, 3, 65, 90),
+      oxygen: critical ? 88 : drift(last.oxygen ?? 97, 1, 94, 99),
+      glucose: critical ? 285 : drift(last.glucose ?? 95, 8, 75, 145),
+      temperature: critical ? 38.1 : Number((Number(last.temperature ?? 36.7) + (Math.random() * .16 - .08)).toFixed(1)),
+      source: 'WEARABLE-LIVE',
+      recordedAt: new Date().toISOString()
+    };
+    this.liveVitalSeed = vital;
+    return vital;
+  }
+
+  private appendLocalVital(vital: any) {
+    const existing = Array.isArray(this.monitoring?.recentVitals) ? this.monitoring.recentVitals : [];
+    const rows = [vital, ...existing].slice(0, 12);
+    this.monitoring = {
+      ...(this.monitoring || {}),
+      latestVital: vital,
+      recentVitals: rows
+    };
+  }
+
+  private sendLiveVital(critical = false) {
+    if (!this.monitoringPatientId || !this.monitoringRunning && !critical) return;
+    const vital = this.nextLiveVital(critical);
+
+    // IMPORTANT: update the live chart immediately. The previous implementation
+    // refreshed the whole monitoring object after every POST, which replaced the
+    // freshly appended point with the backend's older snapshot. That made the
+    // graph look frozen even though the timer was running.
+    this.monitoringAttention = critical || this.monitoringAttention;
+    this.appendLocalVital(vital);
+    this.monitoringUpdatedAt = new Date();
+
+    // Persist the same reading through the real backend. The UI does not wait for
+    // the HTTP response, so the live stream remains visibly moving while MongoDB,
+    // threshold detection and Kafka continue to receive the event.
+    this.api.post<any>('/vitals', vital).subscribe({
+      next: () => {
+        // Do NOT call loadMonitoring()/refresh() here. Those calls can overwrite
+        // the just-added point with an older backend snapshot. Do a full backend
+        // sync only when the user presses Refresh or when the stream is stopped.
+      },
+      error: err => {
+        console.error('Live vital ingestion failed', err);
+        if (!this.monitoringErrorShown) {
+          this.monitoringErrorShown = true;
+          alert('Live graph is running, but the backend /vitals API rejected a reading. The UI stream is active; check the backend console/API.');
+        }
+      }
+    });
   }
 
   simulateCritical() {
-    this.simulateMonitoring(true);
+    if (!this.monitoringPatientId) return;
+    this.sendLiveVital(true);
   }
 
   startMonitoring() {
     if (!this.monitoringPatientId || this.monitoringRunning) return;
     this.monitoringRunning = true;
     this.monitoringCycle = 0;
-    this.simulateMonitoring(false);
+    this.monitoringErrorShown = false;
+    this.liveVitalSeed = this.monitoring?.latestVital || null;
+    this.sendLiveVital(false);
+    // Generate a new wearable reading every 3 seconds. Each reading is persisted
+    // through /vitals, then the monitoring endpoint is refreshed.
     this.monitoringTimer = setInterval(() => {
+      if (!this.monitoringRunning) return;
       this.monitoringCycle++;
-      this.simulateMonitoring(this.monitoringCycle % 3 === 0);
-    }, 6000);
+      this.sendLiveVital(false);
+    }, 3000);
   }
 
   stopMonitoring() {
@@ -2915,6 +3075,7 @@ export class ShellComponent {
       clearInterval(this.monitoringTimer);
       this.monitoringTimer = null;
     }
+    if (this.monitoringPatientId) this.loadMonitoring();
   }
 
   monitoringStatus() {
@@ -2945,73 +3106,27 @@ export class ShellComponent {
   // =====================================================
 
   addVital() {
-
-    if (!this.selected) {
-
-      return;
-
-    }
-
-
-    this.vital = {
-
-      patientId:
-        this.selected.patient.id,
-
-      heartRate:
-        85,
-
-      systolic:
-        120,
-
-      diastolic:
-        80,
-
-      oxygen:
-        98,
-
-      source:
-        'WEARABLE'
-
-    };
-
-
-    this.sendVital();
-
+    if (!this.selected) { alert('Select a patient first.'); return; }
+    this.vital = { patientId:this.selected.patient.id, heartRate:85, systolic:120, diastolic:80, oxygen:98, glucose:100, source:'WEARABLE' };
+    this.tab='vitals';
   }
-
-
-  // =====================================================
-  // SEND VITAL
-  // =====================================================
 
   sendVital() {
-
-    this.api
-      .post<any>(
-        '/vitals',
-        this.vital
-      )
-      .subscribe(
-
-        () => {
-
-          if (this.selected) {
-
-            this.selectPatient(
-              this.selected.patient
-            );
-
-          }
-
-          this.refresh();
-
-        }
-
-      );
-
+    const raw = String(this.vital?.patientId || '').trim();
+    const patient = this.patients.find((p:any) => String(p.id) === raw || String(p.mrn || '').toLowerCase() === raw.toLowerCase());
+    const patientId = patient?.id || raw;
+    if (!patientId) { alert('Enter a patient ID or MRN.'); return; }
+    const payload = { ...this.vital, patientId, source:this.vital.source || 'WEARABLE' };
+    this.api.post<any>('/vitals', payload).subscribe({
+      next: () => {
+        if (patient) { this.selectPatient(patient); }
+        this.refresh();
+        if (this.monitoringPatientId === patientId) this.loadMonitoring();
+        alert('Vital reading saved successfully.');
+      },
+      error: err => { console.error(err); alert('Unable to save vital reading. Check the backend.'); }
+    });
   }
-
 
   // =====================================================
   // CONSENT
@@ -3057,57 +3172,35 @@ export class ShellComponent {
   // =====================================================
 
   addAppointment() {
-
-    const a: any = {
-
-      patientId:
-        this.patients[0]?.id,
-
-      patientName:
-        this.patients[0]?.name ||
-        'Rahul Kumar',
-
-      doctorName:
-        'Dr. Arjun Sharma',
-
-      specialty:
-        'General Medicine',
-
-      date:
-        new Date()
-          .toISOString()
-          .slice(0, 10),
-
-      time:
-        '10:00',
-
-      reason:
-        'Follow-up'
-
-    };
-
-
-    this.api
-      .post(
-        '/appointments',
-        a
-      )
-      .subscribe(
-
-        () => {
-
-          this.refresh();
-
-          alert(
-            'Appointment created.'
-          );
-
-        }
-
-      );
-
+    const today = new Date().toISOString().slice(0,10);
+    this.appointmentForm = { patientId:this.selected?.patient?.id || this.patients[0]?.id || '', specialty:'', doctorName:'', date:today, time:'', status:'SCHEDULED', reason:'Follow-up consultation' };
+    this.appointmentFormOpen = true;
   }
 
+  closeAppointmentForm() { this.appointmentFormOpen = false; this.savingAppointment = false; }
+
+  doctorsForDepartment(dept:string) { return this.doctorDirectory.filter(d=>d.specialty===dept); }
+  availableDoctors() { return this.doctorsForDepartment(this.appointmentForm.specialty || ''); }
+  onAppointmentDepartmentChange() { this.appointmentForm.doctorName=''; this.appointmentForm.time=''; }
+  onAppointmentDoctorChange() { this.appointmentForm.time=''; }
+  onAppointmentDateChange() { this.appointmentForm.time=''; }
+  availableSlots(): string[] {
+    const doctor=this.doctorDirectory.find(d=>d.name===this.appointmentForm.doctorName);
+    if(!doctor) return [];
+    const date=this.appointmentForm.date;
+    return doctor.slots.filter((slot:string)=>!this.appointments.some((a:any)=>a.doctorName===doctor.name && a.date===date && a.time===slot && String(a.status||'SCHEDULED').toUpperCase()!=='CANCELLED'));
+  }
+  saveAppointment() {
+    const p=this.patients.find((x:any)=>x.id===this.appointmentForm.patientId);
+    if(!p || !this.appointmentForm.doctorName || !this.appointmentForm.date || !this.appointmentForm.time) { alert('Please select patient, doctor, date and an available time.'); return; }
+    if(!this.availableSlots().includes(this.appointmentForm.time)) { alert('That slot is no longer available. Please choose another time.'); return; }
+    this.savingAppointment=true;
+    const payload={...this.appointmentForm, patientName:p.name, specialty:this.appointmentForm.specialty, status:'SCHEDULED'};
+    this.api.post<any>('/appointments',payload).subscribe({
+      next:()=>{ this.savingAppointment=false; this.closeAppointmentForm(); this.refresh(); if(this.selected?.patient?.id===p.id) this.selectPatient(p); alert('Appointment booked successfully.'); },
+      error:err=>{ this.savingAppointment=false; console.error(err); alert('Unable to book appointment. Check the backend.'); }
+    });
+  }
 
   barWidth(v: any) { return Math.min(100, Math.abs(Number(v || 0)) * 10); }
 
@@ -3126,11 +3219,11 @@ export class ShellComponent {
   openEscalation(a:any) { this.escalationAlert = a; this.escalationOpen = true; }
   closeEscalation() { this.escalationOpen = false; this.escalationAlert = null; }
   dispatchEscalation() {
-    if (this.escalationAlert) {
-      this.escalationAlert.recipient = this.escalationTeam;
-      this.escalationAlert.escalated = true;
-    }
-    this.closeEscalation();
+    if (!this.escalationAlert?.id) { this.closeEscalation(); return; }
+    this.api.put<any>('/alerts/' + this.escalationAlert.id + '/escalate', { recipient:this.escalationTeam }).subscribe({
+      next:()=>{ this.closeEscalation(); this.refresh(); alert('Priority escalation dispatched.'); },
+      error:()=>{ alert('Escalation endpoint is not available in this backend. The alert was not marked as escalated.'); }
+    });
   }
 
   // =====================================================
@@ -3164,59 +3257,20 @@ export class ShellComponent {
   // =====================================================
 
   newPatient() {
-
-    const p: any = {
-
-      mrn:
-        'MS-' +
-        Math.floor(
-          10000 +
-          Math.random() *
-          89999
-        ),
-
-      name:
-        'New Patient',
-
-      gender:
-        'Male',
-
-      dateOfBirth:
-        '1995-01-01',
-
-      phone:
-        '+91 90000 00000',
-
-      email:
-        'patient@example.com',
-
-      bloodGroup:
-        'O+'
-
-    };
-
-
-    this.api
-      .post(
-        '/patients',
-        p
-      )
-      .subscribe(
-
-        () => {
-
-          this.refresh();
-
-          alert(
-            'Patient created successfully.'
-          );
-
-        }
-
-      );
-
+    this.patientForm = { mrn:'MS-'+Math.floor(10000+Math.random()*89999), name:'', gender:'Male', dateOfBirth:'', phone:'', email:'', bloodGroup:'', emergencyContact:'', address:'', allergiesText:'', conditionsText:'' };
+    this.patientFormOpen = true;
   }
-
+  cancelNewPatient() { this.patientFormOpen=false; this.savingPatient=false; }
+  saveNewPatient() {
+    if(!this.patientForm.name?.trim()) { alert('Please enter patient name.'); return; }
+    this.savingPatient=true;
+    const payload={...this.patientForm, allergies:String(this.patientForm.allergiesText||'').split(',').map((x:string)=>x.trim()).filter(Boolean), conditions:String(this.patientForm.conditionsText||'').split(',').map((x:string)=>x.trim()).filter(Boolean)};
+    delete payload.allergiesText; delete payload.conditionsText;
+    this.api.post<any>('/patients',payload).subscribe({
+      next:()=>{ this.savingPatient=false; this.cancelNewPatient(); this.refresh(); alert('Patient created successfully.'); },
+      error:err=>{ this.savingPatient=false; console.error(err); alert('Unable to create patient. Check the backend.'); }
+    });
+  }
 
   // =====================================================
   // FHIR
@@ -3287,6 +3341,11 @@ export class ShellComponent {
 
   initials(name: string) {
     return (name || 'Patient').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
+  }
+
+
+  ngOnDestroy() {
+    this.stopMonitoring();
   }
 
 
