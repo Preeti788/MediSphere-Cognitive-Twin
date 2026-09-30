@@ -9,6 +9,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
 
 @RestController
@@ -30,7 +31,7 @@ public class MediSphereController {
     public Map<String,Object> dashboard(){
       return Map.of("patients",patients.count(),"appointments",appointments.count(),
                     "activeAlerts",alerts.findByAcknowledgedFalseOrderByCreatedAtDesc().size(),
-                    "medicines",medicines.count());
+                    "medicines",medicines.count(),"carePlans",carePlans.count());
     }
 
     @GetMapping("/patients") public List<Patient> patients(){return patients.findAll();}
@@ -133,7 +134,83 @@ public class MediSphereController {
     @PutMapping("/consents/{patientId}") public Consent updateConsent(@PathVariable String patientId,@RequestBody Consent c){c.id=consents.findByPatientId(patientId).map(x->x.id).orElse(null);c.patientId=patientId;c.updatedAt=Instant.now();return consents.save(c);}
 
     @GetMapping("/care-plans/{patientId}") public List<CarePlan> carePlans(@PathVariable String patientId){return carePlans.findByPatientIdOrderByFollowUpDateAsc(patientId);}
-    @PostMapping("/care-plans") public CarePlan createCarePlan(@RequestBody CarePlan c){c.id=null;return carePlans.save(c);}
+
+    @PostMapping("/care-plans") public CarePlan createCarePlan(@RequestBody CarePlan c){
+      c.id=null; c.updatedAt=Instant.now(); if(c.tasks==null)c.tasks=new ArrayList<>(); updateCareProgress(c);
+      return carePlans.save(c);
+    }
+
+    // Milestone 4: generate a personalized care-plan demo from the same patient context
+    // used by the risk and monitoring modules. This is a rule-based educational workflow,
+    // not a clinically validated treatment engine.
+    @PostMapping("/care-plans/generate/{patientId}")
+    public CarePlan generateCarePlan(@PathVariable String patientId){
+      Patient p=patients.findById(patientId).orElseThrow();
+      Vital latest=vitals.findTop20ByPatientIdOrderByRecordedAtDesc(patientId).stream().findFirst().orElse(new Vital());
+      List<RiskAssessment> history=aiRisk.history(patientId);
+      RiskAssessment latestRisk=history.isEmpty()?null:history.get(0);
+
+      String riskLevel="ROUTINE";
+      if(latestRisk!=null){
+        riskLevel=overallRiskLevel(latestRisk.cardiovascularLevel, latestRisk.diabetesLevel);
+      }
+
+      String conditions=String.join(", ", p.conditions==null?List.of():p.conditions);
+      String lower=conditions.toLowerCase(Locale.ROOT);
+      boolean diabetes=lower.contains("diabet") || (latest.glucose!=null && latest.glucose>250);
+      boolean hypertension=lower.contains("hypertension") || lower.contains("blood pressure") || (latest.systolic!=null && latest.systolic>=160);
+
+      CarePlan c=new CarePlan();
+      c.patientId=patientId;
+      c.title="Personalized Care & Treatment Plan";
+      c.owner="Primary care team";
+      c.riskLevel=riskLevel;
+      c.followUpDate=LocalDate.now().plusDays("HIGH".equals(riskLevel)?7:30).toString();
+      c.goal = diabetes && hypertension
+          ? "Improve day-to-day BP and glucose control through consistent follow-up."
+          : diabetes
+            ? "Support consistent glucose monitoring, treatment adherence and follow-up."
+            : hypertension
+              ? "Support consistent blood-pressure monitoring, treatment adherence and follow-up."
+              : "Maintain healthy routines and review patient progress at follow-up.";
+      c.summary="Plan generated from the current patient profile, recent measurements and available risk assessment.";
+      c.actions=new ArrayList<>();
+      c.tasks=new ArrayList<>();
+      addCareTask(c,"Take prescribed medicines as scheduled","Treatment");
+      if(hypertension) addCareTask(c,"Check blood pressure regularly and record readings","Monitoring");
+      if(diabetes) addCareTask(c,"Check glucose as advised and record readings","Monitoring");
+      addCareTask(c,"Maintain regular physical activity as advised","Lifestyle");
+      addCareTask(c,"Follow a balanced meal plan and healthy routine","Lifestyle");
+      addCareTask(c,"Attend the scheduled follow-up appointment","Follow-up");
+      if("HIGH".equals(riskLevel)) addCareTask(c,"Review recent alerts with the care team","Clinical review");
+      updateCareProgress(c);
+      return carePlans.save(c);
+    }
+
+    @PutMapping("/care-plans/{id}/tasks/{taskIndex}")
+    public CarePlan updateCareTask(@PathVariable String id,@PathVariable int taskIndex,@RequestParam(defaultValue="false") boolean completed){
+      CarePlan c=carePlans.findById(id).orElseThrow();
+      if(c.tasks==null || taskIndex<0 || taskIndex>=c.tasks.size()) throw new IllegalArgumentException("Invalid care task.");
+      c.tasks.get(taskIndex).completed=completed; c.updatedAt=Instant.now(); updateCareProgress(c);
+      return carePlans.save(c);
+    }
+
+    private void addCareTask(CarePlan c,String title,String category){
+      c.tasks.add(new CareTask(title,category));
+      c.actions.add(title);
+    }
+
+    private void updateCareProgress(CarePlan c){
+      if(c.tasks==null || c.tasks.isEmpty()){ c.progress=0; return; }
+      long done=c.tasks.stream().filter(t->t.completed).count();
+      c.progress=(int)Math.round(done*100.0/c.tasks.size());
+    }
+
+    private String overallRiskLevel(String cvd,String diabetes){
+      if("HIGH".equalsIgnoreCase(cvd) || "HIGH".equalsIgnoreCase(diabetes)) return "HIGH";
+      if("MODERATE".equalsIgnoreCase(cvd) || "MODERATE".equalsIgnoreCase(diabetes)) return "MODERATE";
+      return "ROUTINE";
+    }
 
     @GetMapping("/medicines") public List<Medicine> medicines(){return medicines.findAll();}
     @PostMapping("/medicines") @PreAuthorize("hasAnyRole('ADMIN','PHARMACIST')") public Medicine createMedicine(@RequestBody Medicine m){m.id=null;return medicines.save(m);}

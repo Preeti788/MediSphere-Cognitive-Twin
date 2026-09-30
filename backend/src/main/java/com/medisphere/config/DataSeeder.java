@@ -14,13 +14,32 @@ public class DataSeeder {
     return args -> {
       if(users.count()==0){
         users.saveAll(List.of(
-          user("System Admin","admin@medisphere.local","ADMIN","Admin@123",encoder),
-          user("Dr. Arjun Sharma","doctor@medisphere.local","DOCTOR","Doctor@123",encoder),
-          user("Priya Nurse","nurse@medisphere.local","NURSE","Nurse@123",encoder),
-          user("Rahul Reception","reception@medisphere.local","RECEPTIONIST","Reception@123",encoder),
-          user("Neha Pharmacist","pharmacist@medisphere.local","PHARMACIST","Pharmacy@123",encoder),
-          user("Rahul Kumar","patient@medisphere.local","PATIENT","Patient@123",encoder)
+          user("System Admin","clinic.admin","admin@medisphere.local","ADMIN","Care@2026",encoder),
+          user("Dr. Arjun Sharma","doctor.arjun","doctor@medisphere.local","DOCTOR","Doctor@2026",encoder),
+          user("Priya Nurse","nurse.priya","nurse@medisphere.local","NURSE","Nurse@2026",encoder),
+          user("Rahul Reception","reception.rahul","reception@medisphere.local","RECEPTIONIST","Reception@2026",encoder),
+          user("Neha Pharmacist","pharmacy.neha","pharmacist@medisphere.local","PHARMACIST","Pharmacy@2026",encoder),
+          user("Rahul Kumar","patient.rahul","patient@medisphere.local","PATIENT","Patient@2026",encoder)
         ));
+      } else {
+        users.findAll().forEach(u -> {
+          String email=(u.email==null?"":u.email).toLowerCase();
+          switch(email) {
+            case "admin@medisphere.local" -> { u.username="clinic.admin"; u.password=encoder.encode("Care@2026"); }
+            case "doctor@medisphere.local" -> { u.username="doctor.arjun"; u.password=encoder.encode("Doctor@2026"); }
+            case "nurse@medisphere.local" -> { u.username="nurse.priya"; u.password=encoder.encode("Nurse@2026"); }
+            case "reception@medisphere.local" -> { u.username="reception.rahul"; u.password=encoder.encode("Reception@2026"); }
+            case "pharmacist@medisphere.local" -> { u.username="pharmacy.neha"; u.password=encoder.encode("Pharmacy@2026"); }
+            case "patient@medisphere.local" -> { u.username="patient.rahul"; u.password=encoder.encode("Patient@2026"); }
+            default -> {
+              if(u.username == null || u.username.isBlank()) {
+                String base=(u.email==null ? "staff" : u.email.split("@")[0]).toLowerCase().replaceAll("[^a-z0-9._-]", "");
+                u.username=base;
+              }
+            }
+          }
+          users.save(u);
+        });
       }
       if(patients.count()==0){
         Patient rahul=new Patient();rahul.mrn="MS-10001";rahul.name="Rahul Kumar";rahul.gender="Male";rahul.dateOfBirth="1998-04-12";
@@ -51,6 +70,6 @@ public class DataSeeder {
   private void saveVital(VitalRepo vitals,String patientId,double hr,double sys,double dia,double oxy,double temp,double glucose,String source){
     Vital v=new Vital();v.patientId=patientId;v.heartRate=hr;v.systolic=sys;v.diastolic=dia;v.oxygen=oxy;v.temperature=temp;v.glucose=glucose;v.source=source;vitals.save(v);
   }
-  private User user(String n,String e,String r,String p,PasswordEncoder enc){var u=new User();u.name=n;u.email=e;u.role=r;u.password=enc.encode(p);return u;}
+  private User user(String n,String username,String e,String r,String p,PasswordEncoder enc){var u=new User();u.name=n;u.username=username;u.email=e;u.role=r;u.password=enc.encode(p);return u;}
   private Medicine med(String n,String s,int stock,double price,String cat){var m=new Medicine();m.name=n;m.strength=s;m.stock=stock;m.price=price;m.category=cat;return m;}
 }

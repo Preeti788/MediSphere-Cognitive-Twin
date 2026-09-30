@@ -12,6 +12,7 @@ public final class Models {
     public static class User {
         @Id public String id;
         public String name;
+        public String username;
         public String email;
         public String password;
         public String role;
@@ -108,7 +109,26 @@ public final class Models {
         public String goal;
         public String status = "ACTIVE";
         public List<String> actions = new ArrayList<>();
+        public List<CareTask> tasks = new ArrayList<>();
+        public int progress = 0;
+        public String riskLevel = "ROUTINE";
+        public String summary;
+        public String owner = "Care Team";
         public String followUpDate;
+        public Instant updatedAt = Instant.now();
+    }
+
+    public static class CareTask {
+        public String title;
+        public String category;
+        public boolean completed;
+
+        public CareTask() {}
+        public CareTask(String title, String category) {
+            this.title = title;
+            this.category = category;
+            this.completed = false;
+        }
     }
 
     @Document("medicines")

@@ -41,27 +41,19 @@ export class ApiService {
   // LOGIN
   // =========================
 
-  login(
-    emailOrBody: string | { email: string; password: string },
-    password?: string
-  ): Observable<any> {
-
-    const body =
-      typeof emailOrBody === 'string'
-        ? {
-            email: emailOrBody,
-            password: password ?? ''
-          }
-        : emailOrBody;
-
+  login(username: string, password: string): Observable<any> {
     return this.http.post<any>(
       `${this.baseUrl}/auth/login`,
+      { username, password },
+      { headers: new HttpHeaders({ 'Content-Type': 'application/json' }) }
+    );
+  }
+
+  register(body: { name: string; username: string; email: string; password: string }): Observable<any> {
+    return this.http.post<any>(
+      `${this.baseUrl}/auth/register`,
       body,
-      {
-        headers: new HttpHeaders({
-          'Content-Type': 'application/json'
-        })
-      }
+      { headers: new HttpHeaders({ 'Content-Type': 'application/json' }) }
     );
   }
 

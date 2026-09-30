@@ -96,3 +96,29 @@ For presentation, use **Live Monitoring → Vikram Singh → Simulate HR 145 bpm
 - **HIGH:** score 70 to 100
 
 The seeded demo patients intentionally have different clinical profiles so the AI Risk Lab can demonstrate different levels.
+## Milestone 4 – Care Plan & Treatment
+The M4 Care Plans workspace turns the existing patient context into a trackable treatment-plan demonstration. It can generate a patient-specific plan from recorded conditions, recent vitals and the latest available risk assessment, then track task completion and review the latest health readings.
+
+The current implementation is a rule-based educational care-plan workflow, not a clinically validated treatment engine. Example tasks include medication adherence, BP/glucose monitoring when relevant, healthy routine activities and follow-up.
+
+### M4 demo flow
+1. Open **M4 Care Plans**.
+2. Select a patient.
+3. Click **Generate care plan**.
+4. Show the goal, risk level, follow-up date and task list.
+5. Tick a few tasks to demonstrate treatment progress.
+6. Show the latest health readings and the plan history.
+
+
+
+## Login
+The login screen now uses **Username or Email + Password**. Nothing is pre-filled, so the user can enter credentials manually.
+
+Demo staff accounts:
+- Username: `clinic.admin`  Password: `Care@2026`
+- Username: `doctor.arjun`  Password: `Doctor@2026`
+
+The login page also includes a **Create staff account** option for a local project account. New accounts use the `RECEPTIONIST` role for demonstration.
+
+## Dashboard UI refresh
+The dashboard has been rebuilt as a clean clinical/EHR-style workspace inspired by the supplied reference: light high-contrast layout, left navigation, search/topbar, four KPI cards, patient health overview, live heart-rate trend chart, alerts, appointments, AI risk preview, and Care Plan progress. The existing M1-M4 backend workflows remain connected to the same Angular shell.

@@ -1,1 +1,1 @@
-*{box-sizing:border-box}body{margin:0;background:#f5f8fa;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input{font:inherit}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#050c16;color:#edf4ff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-height:100vh}button,input,select,textarea{font:inherit}::selection{background:#245ea8;color:#fff}
