@@ -1550,11 +1550,6 @@ import { RouterLink } from '@angular/router';
 
     }
 
-  
-
-/* DARK LANDING PAGE */
-:host{color:#edf4ff!important}.home-page{background:#050c16!important;color:#edf4ff!important}.navbar{background:rgba(6,14,25,.94)!important;border-bottom-color:#1c2d46!important}.brand-icon{background:#246fe8!important;box-shadow:0 10px 24px rgba(36,111,232,.25)!important}.brand-name{color:#eef5ff!important}.brand-tagline{color:#7288a5!important}.nav-links a{color:#91a6c0!important}.nav-links a:hover{color:#67aaff!important}.login-btn{color:#a8c3e5!important}.login-btn:hover{background:#10213a!important}.get-started-btn{background:#246fe8!important;box-shadow:0 10px 24px rgba(36,111,232,.22)!important}.hero{background:#050c16!important}.hero h1{color:#f3f7ff!important}.hero-text,.trust-item span{color:#9eb1c8!important}.eyebrow{color:#75b7ff!important}.secondary-btn{background:#0c1829!important;color:#c1d2e7!important;border-color:#263e61!important}.trust-item{border-color:#1a304c!important}.health-card,.feature-card,.technology-card,.cta-card,.floating-card,.health-card.main-card{background:#0c1629!important;border-color:#203554!important;color:#eaf3ff!important;box-shadow:0 18px 44px rgba(0,0,0,.28)!important}.health-card h3,.feature-card h3,.technology-card h3{color:#eef5ff!important}.health-card span,.feature-card p,.technology-card p{color:#8ea3bd!important}.vital{background:#0f1d32!important;border-color:#213a5c!important}.vital span{color:#7e95b0!important}.vital strong{color:#e9f2ff!important}.alert-card strong,.ai-card strong{color:#e9f2ff!important}.alert-card span,.ai-card span{color:#7f95af!important}.features-section,.technology-section{background:#07111e!important}.section-heading h2{color:#eef5ff!important}.section-heading p{color:#8da2bc!important}.feature-grid .feature-card{background:#0c1728!important;border-color:#203554!important}.cta-section{background:#0b1930!important;border-color:#24446b!important}.cta-section *{color:#e8f2ff}.cta-section p{color:#9db1c9!important}footer{background:#050c16!important;border-top-color:#192b44!important;color:#7289a4!important}footer strong{color:#dce8f6!important}
-
   `]
 })
 export class HomeComponent {}

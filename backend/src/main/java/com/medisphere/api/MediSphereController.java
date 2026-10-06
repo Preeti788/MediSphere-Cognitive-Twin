@@ -1,15 +1,17 @@
 package com.medisphere.api;
 
 import com.medisphere.model.Models.*;
-import com.medisphere.model.RiskModels.RiskAssessment;
-import com.medisphere.ai.AiRiskService;
 import com.medisphere.repo.*;
+import com.medisphere.monitoring.MonitoringService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.*;
 
 @RestController
@@ -18,23 +20,29 @@ public class MediSphereController {
     private final PatientRepo patients; private final VitalRepo vitals; private final LabRepo labs;
     private final AppointmentRepo appointments; private final ConsentRepo consents; private final AlertRepo alerts;
     private final CarePlanRepo carePlans; private final MedicineRepo medicines; private final UserRepo users; private final AuditRepo audit;
-    private final KafkaTemplate<String,Object> kafka; private final String topic; private final AiRiskService aiRisk;
+    private final KafkaTemplate<String,Object> kafka; private final String topic;
+    private final MonitoringService monitoring;
+    private final MongoTemplate mongoTemplate;
 
     public MediSphereController(PatientRepo patients,VitalRepo vitals,LabRepo labs,AppointmentRepo appointments,
       ConsentRepo consents,AlertRepo alerts,CarePlanRepo carePlans,MedicineRepo medicines,UserRepo users,
-      AuditRepo audit,KafkaTemplate<String,Object> kafka,@Value("${medisphere.kafka-topic}") String topic, AiRiskService aiRisk){
+      AuditRepo audit,KafkaTemplate<String,Object> kafka,@Value("${medisphere.kafka-topic}") String topic,
+      MonitoringService monitoring, MongoTemplate mongoTemplate){
       this.patients=patients;this.vitals=vitals;this.labs=labs;this.appointments=appointments;this.consents=consents;
-      this.alerts=alerts;this.carePlans=carePlans;this.medicines=medicines;this.users=users;this.audit=audit;this.kafka=kafka;this.topic=topic;this.aiRisk=aiRisk;
+      this.alerts=alerts;this.carePlans=carePlans;this.medicines=medicines;this.users=users;this.audit=audit;
+      this.kafka=kafka;this.topic=topic;this.monitoring=monitoring;this.mongoTemplate=mongoTemplate;
     }
 
     @GetMapping("/dashboard")
     public Map<String,Object> dashboard(){
       return Map.of("patients",patients.count(),"appointments",appointments.count(),
                     "activeAlerts",alerts.findByAcknowledgedFalseOrderByCreatedAtDesc().size(),
-                    "medicines",medicines.count(),"carePlans",carePlans.count());
+                    "medicines",medicines.count(),
+                    "carePlans",carePlans.count());
     }
 
     @GetMapping("/patients") public List<Patient> patients(){return patients.findAll();}
+
     @GetMapping("/patients/{id}") public Map<String,Object> patient360(@PathVariable String id){
       var p=patients.findById(id).orElseThrow();
       return Map.of("patient",p,"vitals",vitals.findTop20ByPatientIdOrderByRecordedAtDesc(id),
@@ -42,80 +50,60 @@ public class MediSphereController {
         "alerts",alerts.findByPatientIdOrderByCreatedAtDesc(id),"carePlans",carePlans.findByPatientIdOrderByFollowUpDateAsc(id),
         "consent",consents.findByPatientId(id).orElseGet(()->new Consent()));
     }
+
     @PostMapping("/patients") public Patient createPatient(@RequestBody Patient p){p.id=null;return patients.save(p);}
+
     @PutMapping("/patients/{id}") public Patient updatePatient(@PathVariable String id,@RequestBody Patient p){p.id=id;return patients.save(p);}
 
+    // =====================================================
+    // DELETE PATIENT + RELATED CLINICAL DATA
+    // =====================================================
+    @DeleteMapping("/patients/{id}")
+    public Map<String,Object> deletePatient(@PathVariable String id){
+      if(!patients.existsById(id)){
+        throw new NoSuchElementException("Patient not found: " + id);
+      }
+
+      // Delete every patient-linked record, not only the latest 20 vitals.
+      deletePatientRecords("vitals", id);
+      deletePatientRecords("labs", id);
+      deletePatientRecords("appointments", id);
+      deletePatientRecords("alerts", id);
+      deletePatientRecords("care_plans", id);
+      deletePatientRecords("consents", id);
+
+      // Digital Health Twin uses the deterministic id TWIN-{patientId}.
+      mongoTemplate.remove(
+          Query.query(Criteria.where("_id").is("TWIN-" + id)),
+          "digital_health_twins"
+      );
+
+      // Finally remove the patient itself.
+      patients.deleteById(id);
+
+      return Map.of(
+          "success", true,
+          "patientId", id,
+          "message", "Patient and associated clinical records deleted successfully."
+      );
+    }
+
+    private void deletePatientRecords(String collection, String patientId){
+      if(!mongoTemplate.collectionExists(collection)) return;
+      mongoTemplate.remove(
+          Query.query(Criteria.where("patientId").is(patientId)),
+          collection
+      );
+    }
+
     @GetMapping("/vitals/{patientId}") public List<Vital> getVitals(@PathVariable String patientId){return vitals.findTop20ByPatientIdOrderByRecordedAtDesc(patientId);}
+
     @PostMapping("/vitals") public Vital ingestVital(@RequestBody Vital v){
       v.id=null;v.recordedAt=Instant.now();vitals.save(v);
-      publishVital(v);
-      createMonitoringAlerts(v);
+      try{kafka.send(topic,v.patientId,v);}catch(Exception ignored){}
+      // Evaluate synchronously so monitoring still works when Kafka is not running.
+      monitoring.evaluate(v);
       return v;
-    }
-
-    // Milestone 3: demo stream endpoint used by the Live Monitoring screen.
-    // It creates realistic normal/critical readings so the alert workflow can be demonstrated
-    // without requiring a physical wearable device.
-    @PostMapping("/monitoring/{patientId}/simulate")
-    public Map<String,Object> simulateMonitoring(@PathVariable String patientId,@RequestParam(defaultValue="false") boolean critical){
-      patients.findById(patientId).orElseThrow();
-      Vital v=new Vital(); v.patientId=patientId; v.source="LIVE_MONITOR";
-      if(critical){
-        v.heartRate=145.0; v.systolic=180.0; v.diastolic=110.0; v.oxygen=90.0; v.temperature=39.1; v.glucose=300.0;
-      }else{
-        v.heartRate=78.0; v.systolic=122.0; v.diastolic=80.0; v.oxygen=98.0; v.temperature=36.8; v.glucose=108.0;
-      }
-      v.id=null; v.recordedAt=Instant.now(); vitals.save(v);
-      publishVital(v);
-      List<Alert> created=createMonitoringAlerts(v);
-      return Map.of("vital",v,"alerts",created,"monitoringStatus",critical?"ATTENTION_REQUIRED":"STABLE","note","Milestone 3 demonstration stream; not a medical device.");
-    }
-
-    @GetMapping("/monitoring/{patientId}/latest")
-    public Map<String,Object> monitoringLatest(@PathVariable String patientId){
-      var p=patients.findById(patientId).orElseThrow();
-      var vs=vitals.findTop20ByPatientIdOrderByRecordedAtDesc(patientId);
-      var as=alerts.findByPatientIdOrderByCreatedAtDesc(patientId);
-      return Map.of("patient",p,"latestVital",vs.isEmpty()?new Vital():vs.get(0),"recentVitals",vs.stream().limit(8).toList(),"recentAlerts",as.stream().limit(10).toList(),"monitoringMode","DEMO_STREAM");
-    }
-
-    private void publishVital(Vital v){ try{kafka.send(topic,v.patientId,v);}catch(Exception ignored){} }
-
-    private List<Alert> createMonitoringAlerts(Vital v){
-      List<Alert> created=new ArrayList<>();
-      if(v.heartRate!=null && (v.heartRate>140 || v.heartRate<40))
-        created.add(saveAlert(v.patientId,"CRITICAL","HEART_RATE","Critical heart rate detected: "+v.heartRate+" bpm (threshold > 140 bpm).",v.heartRate,"bpm","> 140 bpm"));
-      else if(v.heartRate!=null && (v.heartRate>120 || v.heartRate<45))
-        created.add(saveAlert(v.patientId,"HIGH","HEART_RATE","High heart rate detected: "+v.heartRate+" bpm (threshold > 120 bpm).",v.heartRate,"bpm","> 120 bpm"));
-      if(v.oxygen!=null && v.oxygen<90)
-        created.add(saveAlert(v.patientId,"CRITICAL","OXYGEN","Critical oxygen saturation: "+v.oxygen+"% (threshold < 90%).",v.oxygen,"%","< 90%"));
-      else if(v.oxygen!=null && v.oxygen<92)
-        created.add(saveAlert(v.patientId,"HIGH","OXYGEN","Low oxygen saturation: "+v.oxygen+"% (threshold < 92%).",v.oxygen,"%","< 92%"));
-      if(v.systolic!=null && v.systolic>=180)
-        created.add(saveAlert(v.patientId,"CRITICAL","BLOOD_PRESSURE","Very high systolic blood pressure: "+v.systolic+" mmHg.",v.systolic,"mmHg","≥ 180 mmHg"));
-      else if(v.systolic!=null && (v.systolic>160 || v.systolic<90))
-        created.add(saveAlert(v.patientId,"HIGH","BLOOD_PRESSURE","Abnormal systolic blood pressure: "+v.systolic+" mmHg.",v.systolic,"mmHg","> 160 or < 90 mmHg"));
-      if(v.temperature!=null && v.temperature>=39)
-        created.add(saveAlert(v.patientId,"CRITICAL","TEMPERATURE","High temperature detected: "+v.temperature+" °C.",v.temperature,"°C","≥ 39 °C"));
-      else if(v.temperature!=null && v.temperature>38.5)
-        created.add(saveAlert(v.patientId,"HIGH","TEMPERATURE","Elevated temperature detected: "+v.temperature+" °C.",v.temperature,"°C","> 38.5 °C"));
-      if(v.glucose!=null && (v.glucose>=300 || v.glucose<55))
-        created.add(saveAlert(v.patientId,"CRITICAL","GLUCOSE","Critical glucose reading: "+v.glucose+" mg/dL.",v.glucose,"mg/dL","≥ 300 or < 55 mg/dL"));
-      else if(v.glucose!=null && (v.glucose>250 || v.glucose<70))
-        created.add(saveAlert(v.patientId,"HIGH","GLUCOSE","Abnormal glucose reading: "+v.glucose+" mg/dL.",v.glucose,"mg/dL","> 250 or < 70 mg/dL"));
-      return created;
-    }
-
-    private Alert saveAlert(String patientId,String severity,String type,String message,Double value,String unit,String threshold){
-      Alert a=new Alert(); a.patientId=patientId; a.severity=severity; a.type=type; a.message=message; a.observedValue=value; a.unit=unit; a.threshold=threshold;
-      a.recipient = switch(type){
-        case "HEART_RATE", "BLOOD_PRESSURE" -> "Cardiology care team";
-        case "OXYGEN" -> "Respiratory care team";
-        case "GLUCOSE" -> "Diabetes care team";
-        default -> "Primary care team";
-      };
-      a.notificationStatus = "NOTIFICATION_QUEUED";
-      return alerts.save(a);
     }
 
     @GetMapping("/labs/{patientId}") public List<Lab> labs(@PathVariable String patientId){return labs.findByPatientIdOrderByCollectedAtDesc(patientId);}
@@ -133,84 +121,6 @@ public class MediSphereController {
     @GetMapping("/consents/{patientId}") public Consent consent(@PathVariable String patientId){return consents.findByPatientId(patientId).orElseGet(()->{var c=new Consent();c.patientId=patientId;return c;});}
     @PutMapping("/consents/{patientId}") public Consent updateConsent(@PathVariable String patientId,@RequestBody Consent c){c.id=consents.findByPatientId(patientId).map(x->x.id).orElse(null);c.patientId=patientId;c.updatedAt=Instant.now();return consents.save(c);}
 
-    @GetMapping("/care-plans/{patientId}") public List<CarePlan> carePlans(@PathVariable String patientId){return carePlans.findByPatientIdOrderByFollowUpDateAsc(patientId);}
-
-    @PostMapping("/care-plans") public CarePlan createCarePlan(@RequestBody CarePlan c){
-      c.id=null; c.updatedAt=Instant.now(); if(c.tasks==null)c.tasks=new ArrayList<>(); updateCareProgress(c);
-      return carePlans.save(c);
-    }
-
-    // Milestone 4: generate a personalized care-plan demo from the same patient context
-    // used by the risk and monitoring modules. This is a rule-based educational workflow,
-    // not a clinically validated treatment engine.
-    @PostMapping("/care-plans/generate/{patientId}")
-    public CarePlan generateCarePlan(@PathVariable String patientId){
-      Patient p=patients.findById(patientId).orElseThrow();
-      Vital latest=vitals.findTop20ByPatientIdOrderByRecordedAtDesc(patientId).stream().findFirst().orElse(new Vital());
-      List<RiskAssessment> history=aiRisk.history(patientId);
-      RiskAssessment latestRisk=history.isEmpty()?null:history.get(0);
-
-      String riskLevel="ROUTINE";
-      if(latestRisk!=null){
-        riskLevel=overallRiskLevel(latestRisk.cardiovascularLevel, latestRisk.diabetesLevel);
-      }
-
-      String conditions=String.join(", ", p.conditions==null?List.of():p.conditions);
-      String lower=conditions.toLowerCase(Locale.ROOT);
-      boolean diabetes=lower.contains("diabet") || (latest.glucose!=null && latest.glucose>250);
-      boolean hypertension=lower.contains("hypertension") || lower.contains("blood pressure") || (latest.systolic!=null && latest.systolic>=160);
-
-      CarePlan c=new CarePlan();
-      c.patientId=patientId;
-      c.title="Personalized Care & Treatment Plan";
-      c.owner="Primary care team";
-      c.riskLevel=riskLevel;
-      c.followUpDate=LocalDate.now().plusDays("HIGH".equals(riskLevel)?7:30).toString();
-      c.goal = diabetes && hypertension
-          ? "Improve day-to-day BP and glucose control through consistent follow-up."
-          : diabetes
-            ? "Support consistent glucose monitoring, treatment adherence and follow-up."
-            : hypertension
-              ? "Support consistent blood-pressure monitoring, treatment adherence and follow-up."
-              : "Maintain healthy routines and review patient progress at follow-up.";
-      c.summary="Plan generated from the current patient profile, recent measurements and available risk assessment.";
-      c.actions=new ArrayList<>();
-      c.tasks=new ArrayList<>();
-      addCareTask(c,"Take prescribed medicines as scheduled","Treatment");
-      if(hypertension) addCareTask(c,"Check blood pressure regularly and record readings","Monitoring");
-      if(diabetes) addCareTask(c,"Check glucose as advised and record readings","Monitoring");
-      addCareTask(c,"Maintain regular physical activity as advised","Lifestyle");
-      addCareTask(c,"Follow a balanced meal plan and healthy routine","Lifestyle");
-      addCareTask(c,"Attend the scheduled follow-up appointment","Follow-up");
-      if("HIGH".equals(riskLevel)) addCareTask(c,"Review recent alerts with the care team","Clinical review");
-      updateCareProgress(c);
-      return carePlans.save(c);
-    }
-
-    @PutMapping("/care-plans/{id}/tasks/{taskIndex}")
-    public CarePlan updateCareTask(@PathVariable String id,@PathVariable int taskIndex,@RequestParam(defaultValue="false") boolean completed){
-      CarePlan c=carePlans.findById(id).orElseThrow();
-      if(c.tasks==null || taskIndex<0 || taskIndex>=c.tasks.size()) throw new IllegalArgumentException("Invalid care task.");
-      c.tasks.get(taskIndex).completed=completed; c.updatedAt=Instant.now(); updateCareProgress(c);
-      return carePlans.save(c);
-    }
-
-    private void addCareTask(CarePlan c,String title,String category){
-      c.tasks.add(new CareTask(title,category));
-      c.actions.add(title);
-    }
-
-    private void updateCareProgress(CarePlan c){
-      if(c.tasks==null || c.tasks.isEmpty()){ c.progress=0; return; }
-      long done=c.tasks.stream().filter(t->t.completed).count();
-      c.progress=(int)Math.round(done*100.0/c.tasks.size());
-    }
-
-    private String overallRiskLevel(String cvd,String diabetes){
-      if("HIGH".equalsIgnoreCase(cvd) || "HIGH".equalsIgnoreCase(diabetes)) return "HIGH";
-      if("MODERATE".equalsIgnoreCase(cvd) || "MODERATE".equalsIgnoreCase(diabetes)) return "MODERATE";
-      return "ROUTINE";
-    }
 
     @GetMapping("/medicines") public List<Medicine> medicines(){return medicines.findAll();}
     @PostMapping("/medicines") @PreAuthorize("hasAnyRole('ADMIN','PHARMACIST')") public Medicine createMedicine(@RequestBody Medicine m){m.id=null;return medicines.save(m);}
@@ -219,13 +129,20 @@ public class MediSphereController {
     @GetMapping("/users") @PreAuthorize("hasRole('ADMIN')") public List<User> users(){return users.findAll().stream().peek(u->u.password=null).toList();}
 
     @PostMapping("/ai/risk/{patientId}")
-    public RiskAssessment risk(@PathVariable String patientId){ return aiRisk.assess(patientId); }
-
-    @GetMapping("/ai/risk/{patientId}/history")
-    public List<RiskAssessment> riskHistory(@PathVariable String patientId){ return aiRisk.history(patientId); }
-
-    @GetMapping("/ai/federated-demo")
-    public Map<String,Object> federatedDemo(){ return aiRisk.federatedDemo(); }
+    public Map<String,Object> risk(@PathVariable String patientId){
+      var vs=vitals.findTop20ByPatientIdOrderByRecordedAtDesc(patientId);
+      double score=0; List<String> factors=new ArrayList<>();
+      if(!vs.isEmpty()){
+        var v=vs.get(0);
+        if(v.heartRate!=null && v.heartRate>100){score+=25;factors.add("Elevated heart rate");}
+        if(v.systolic!=null && v.systolic>140){score+=30;factors.add("Elevated systolic blood pressure");}
+        if(v.oxygen!=null && v.oxygen<95){score+=30;factors.add("Reduced oxygen saturation");}
+        if(v.glucose!=null && v.glucose>140){score+=15;factors.add("Elevated glucose");}
+      }
+      String level=score>=60?"HIGH":score>=30?"MODERATE":"LOW";
+      return Map.of("patientId",patientId,"riskType","CARDIOVASCULAR_DEMO","score",Math.min(score,100),"level",level,
+        "explanations",factors,"note","Demo explainable risk engine; not a clinical diagnosis.");
+    }
 
     @GetMapping("/smart/authorize") public Map<String,Object> smartAuthorize(@RequestParam String client_id,@RequestParam String redirect_uri){
       return Map.of("client_id",client_id,"redirect_uri",redirect_uri,"scope","patient/*.read openid fhirUser",

@@ -92,11 +92,6 @@ public final class Models {
         public String severity;
         public String type;
         public String message;
-        public String recipient;
-        public String notificationStatus = "NOTIFICATION_QUEUED";
-        public Double observedValue;
-        public String unit;
-        public String threshold;
         public boolean acknowledged;
         public Instant createdAt = Instant.now();
     }
@@ -109,26 +104,13 @@ public final class Models {
         public String goal;
         public String status = "ACTIVE";
         public List<String> actions = new ArrayList<>();
-        public List<CareTask> tasks = new ArrayList<>();
-        public int progress = 0;
-        public String riskLevel = "ROUTINE";
-        public String summary;
-        public String owner = "Care Team";
         public String followUpDate;
+        public Integer progress = 0;
+        public Integer adherence = 0;
+        public String priority = "MEDIUM";
+        public String category = "GENERAL";
+        public String generatedBy = "CLINICIAN";
         public Instant updatedAt = Instant.now();
-    }
-
-    public static class CareTask {
-        public String title;
-        public String category;
-        public boolean completed;
-
-        public CareTask() {}
-        public CareTask(String title, String category) {
-            this.title = title;
-            this.category = category;
-            this.completed = false;
-        }
     }
 
     @Document("medicines")
@@ -139,6 +121,63 @@ public final class Models {
         public int stock;
         public double price;
         public String category;
+        public String batchNumber;
+        public String expiryDate;
+        public String supplier;
+        public int reorderLevel = 20;
+        public boolean active = true;
+    }
+
+    @Document("prescriptions")
+    public static class Prescription {
+        @Id public String id;
+        public String patientId;
+        public String patientName;
+        public String doctorName;
+        public String diagnosis;
+        public String medicineName;
+        public String strength;
+        public String dosage;
+        public String frequency;
+        public String timing;
+        public int durationDays = 30;
+        public String instructions;
+        public String status = "ACTIVE";
+        public Instant createdAt = Instant.now();
+    }
+
+    @Document("medication_events")
+    public static class MedicationEvent {
+        @Id public String id;
+        public String patientId;
+        public String prescriptionId;
+        public String medicineName;
+        public String eventType; // TAKEN, MISSED, REFUSED, DISPENSED, STOPPED
+        public String scheduledAt;
+        public Instant recordedAt = Instant.now();
+        public String notes;
+    }
+
+    @Document("medical_documents")
+    public static class MedicalDocument {
+        @Id public String id;
+        public String patientId;
+        public String name;
+        public String documentType;
+        public String storageKey;
+        public String description;
+        public Instant uploadedAt = Instant.now();
+    }
+
+    @Document("notifications")
+    public static class Notification {
+        @Id public String id;
+        public String patientId;
+        public String title;
+        public String message;
+        public String severity = "INFO";
+        public boolean read = false;
+        public Instant createdAt = Instant.now();
     }
 
     @Document("audit_logs")

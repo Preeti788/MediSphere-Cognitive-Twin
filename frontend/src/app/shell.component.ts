@@ -3,248 +3,484 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from './api.service';
 import { Router } from '@angular/router';
-import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-<div class="app">
+<div class="app clinical-app">
 
-  <aside>
+  <div class="mobile-backdrop" *ngIf="sidebarOpen" (click)="closeSidebar()"></div>
 
-    <div class="logo">
-      <span>✚</span>
-
+  <aside class="clinical-sidebar" [class.mobile-open]="sidebarOpen">
+    <div class="logo clinical-logo">
+      <span class="logo-mark">✚</span>
       <div>
         <b>MediSphere</b>
-        <small>Healthcare Management</small>
+        <small>Clinical Intelligence</small>
       </div>
     </div>
 
-    <button
-      *ngFor="let x of nav"
-      [class.active]="tab===x.id"
-      (click)="tab=x.id">
-
-      {{x.icon}}
+    <div class="sidebar-label">WORKSPACE</div>
+    <button *ngFor="let x of nav" class="nav-item" [class.active]="tab===x.id" (click)="navigateTo(x.id)">
+      <span class="nav-icon">{{x.icon}}</span>
       <span>{{x.label}}</span>
-
+      <span class="nav-arrow" *ngIf="tab===x.id">›</span>
     </button>
 
-    <div class="side-bottom">
-
-      <div class="user-mini">
-
-        {{user?.name}}
-
-        <small>
-          {{user?.role}}
-        </small>
-
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="doctor-avatar-small">{{user?.name?.charAt(0) || 'D'}}</div>
+        <div><b>{{user?.name || 'Clinical User'}}</b><small>{{user?.role || 'CARE TEAM'}}</small></div>
       </div>
-
-      <button
-        (click)="logout()">
-
-        ↪ Logout
-
-      </button>
-
+      <button class="logout-btn" (click)="logout()">↪ <span>Logout</span></button>
     </div>
-
   </aside>
 
-
-  <main>
-
-    <div class="clinical-topnav">
-      <div class="doctor-strip">
-        <span class="doctor-avatar">{{initials(user?.name || 'MediSphere User')}}</span>
-        <div><b>{{user?.name || 'MediSphere User'}}</b><small>{{user?.role || 'Clinical User'}}</small></div>
+  <main class="clinical-main">
+    <div class="clinical-topbar">
+      <button type="button" class="mobile-menu-btn" (click)="toggleSidebar()" aria-label="Open navigation">☰</button>
+      <div class="page-context">
+        <span class="context-kicker">MEDISPHERE / {{title() | uppercase}}</span>
+        <h1>{{title()}}</h1>
       </div>
-      <div class="milestone-nav">
-        <button [class.active]="tab==='dashboard'" (click)="tab='dashboard'">M1 Patient 360</button>
-        <button [class.active]="tab==='aiRisk'" (click)="tab='aiRisk'">M2 Risk Review</button>
-        <button [class.active]="tab==='monitoring'" (click)="tab='monitoring'">M3 Monitoring</button>
-        <button [class.active]="tab==='carePlans'" (click)="openCarePlans()">M4 Care Plan</button>
+
+      <div class="milestone-strip">
+        <button [class.active]="tab==='dashboard' || tab==='patient360' || tab==='patients'" (click)="navigateTo('dashboard')">M1 <span>Foundation</span></button>
+        <button [class.active]="tab==='aiRisk'" (click)="navigateTo('aiRisk')">M2 <span>AI Risk</span></button>
+        <button [class.active]="tab==='monitoring' || tab==='vitals'" (click)="navigateTo('monitoring')">M3 <span>Monitoring</span></button>
+        <button [class.active]="tab==='careplans'" (click)="navigateTo('careplans')">M4 <span>Care Plan</span></button>
       </div>
-      <span class="hipaa-badge">● System ready</span>
+
+      <div class="topbar-actions">
+        <div class="global-search clinical-search">
+          <span>⌕</span>
+          <input [(ngModel)]="globalSearch" (keyup.enter)="runGlobalSearch()" placeholder="Search patient, MRN...">
+          <button type="button" class="search-btn" (click)="runGlobalSearch()">Search</button>
+        </div>
+        <button type="button" class="top-icon-btn" title="Open clinical alerts" (click)="navigateTo('alerts')">◇<span class="alert-badge" *ngIf="dash.activeAlerts">{{dash.activeAlerts}}</span></button>
+        <span class="system-state"><i></i> System online</span>
+        <button type="button" class="refresh-btn" (click)="refresh()">↻ Refresh</button>
+      </div>
     </div>
 
-    <header>
-
-      <div>
-
-        <h1>
-          {{title()}}
-        </h1>
-
-        <p>
-          Patient records, appointments and care tracking
-        </p>
-
+    <div class="patient-context-bar" *ngIf="selected?.patient">
+      <div class="selected-patient-chip">
+        <div class="avatar">{{(selected.patient.name || 'P').charAt(0)}}</div>
+        <div><b>{{selected.patient.name}}</b><small>{{selected.patient.mrn}} · {{selected.patient.bloodGroup || 'Blood group —'}}</small></div>
       </div>
-
-      <div class="header-actions">
-
-        <span class="live">
-          ● System online
-        </span>
-
-        <button
-          (click)="refresh()">
-
-          {{refreshing ? '⟳ Updating…' : '↻ Refresh'}}
-
-        </button>
-
+      <div class="context-actions">
+        <button type="button" (click)="navigateTo('patient360')">Patient 360</button>
+        <button type="button" (click)="addVital()">+ Record Vital</button>
+        <button type="button" (click)="navigateTo('monitoring')">Live Monitoring</button>
       </div>
-
-    </header>
+    </div>
 
 
     <!-- ================================================= -->
     <!-- DASHBOARD -->
     <!-- ================================================= -->
 
-    <section *ngIf="tab==='dashboard'" class="content dashboard-page">
+    <section
+      *ngIf="tab==='dashboard'"
+      class="content">
 
-      <div class="ref-dashboard-topbar">
-        <div class="ref-search">
-          <span>⌕</span>
-          <input [(ngModel)]="search" placeholder="Search patient by name, MRN, or ID..." />
-        </div>
-        <div class="ref-top-actions">
-          <button class="ref-top-icon" (click)="tab='alerts'" title="Clinical alerts">♧<i *ngIf="dash.activeAlerts">{{dash.activeAlerts}}</i></button>
-          <button class="ref-top-icon" title="Notifications">♟</button>
-          <div class="ref-mini-profile">
-            <span class="ref-profile-avatar">{{initials(user?.name || 'Clinical User')}}</span>
-            <div><b>{{user?.name || 'Clinical User'}}</b><small>{{user?.role || 'Clinical User'}}</small></div>
-          </div>
-        </div>
-      </div>
+      <div class="hero">
 
-      <div class="ref-dashboard-heading">
         <div>
-          <h2>Good day, {{user?.name || 'Clinical User'}} 👋</h2>
-          <p>Here's your clinical overview for today</p>
+
+          <span class="eyebrow">
+            DIGITAL HEALTH PLATFORM
+          </span>
+
+          <h2>
+            Patient care, connected.
+          </h2>
+
+          <p>
+            FHIR-ready data exchange, Digital Health Twin,
+            real-time vitals and clinical workflows in one place.
+          </p>
+
         </div>
-        <div class="ref-heading-meta">
-          <span>{{today | date:'EEE, dd MMM yyyy'}}</span>
-          <button (click)="refresh()">Today⌄</button>
-          <em><b></b> Live System</em>
+
+        <div class="hero-icon">
+          ♥
         </div>
+
       </div>
 
-      <div class="ref-kpi-grid">
-        <button class="ref-kpi ref-kpi-blue" (click)="tab='patients'">
-          <span class="ref-kpi-icon">♟</span>
-          <span><small>Total Patients</small><strong>{{dash.patients || patients.length || 0}}</strong><em>↑ 12% this week</em></span>
-        </button>
-        <button class="ref-kpi ref-kpi-green" (click)="tab='monitoring'">
-          <span class="ref-kpi-icon">♥</span>
-          <span><small>Active Monitoring</small><strong>{{monitoringRunning ? 1 : 42}}</strong><em>{{monitoringRunning ? 'Live patient' : 'Live patients'}}</em></span>
-        </button>
-        <button class="ref-kpi ref-kpi-red" (click)="tab='alerts'">
-          <span class="ref-kpi-icon">⚠</span>
-          <span><small>Critical Alerts</small><strong>{{dash.activeAlerts || 3}}</strong><em>Requires attention</em></span>
-        </button>
-        <button class="ref-kpi ref-kpi-purple" (click)="openCarePlans()">
-          <span class="ref-kpi-icon">▣</span>
-          <span><small>Care Plans</small><strong>{{dash.carePlans ?? 86}}</strong><em>+4 this week</em></span>
-        </button>
+
+      <div class="cards">
+
+        <div class="metric">
+
+          <span>
+            Patients
+          </span>
+
+          <b>
+            {{dash.patients}}
+          </b>
+
+          <small>
+            Registered records
+          </small>
+
+        </div>
+
+
+        <div class="metric">
+
+          <span>
+            Appointments
+          </span>
+
+          <b>
+            {{dash.appointments}}
+          </b>
+
+          <small>
+            Across care teams
+          </small>
+
+        </div>
+
+
+        <div class="metric warn">
+
+          <span>
+            Active alerts
+          </span>
+
+          <b>
+            {{dash.activeAlerts}}
+          </b>
+
+          <small>
+            Needs attention
+          </small>
+
+        </div>
+
+
+        <div class="metric">
+          <span>Medicines</span>
+          <b>{{dash.medicines}}</b>
+          <small>Pharmacy inventory</small>
+        </div>
+
+        <div class="metric care-metric">
+          <span>Care plans</span>
+          <b>{{dash.carePlans || 0}}</b>
+          <small>M4 treatment workflows</small>
+        </div>
+
       </div>
 
-      <div class="ref-main-grid">
-        <div class="ref-card ref-monitor-card">
-          <div class="ref-card-title">
-            <div><h3>Live Patient Monitoring</h3><p>Continuous vital-sign stream</p></div>
-            <span class="ref-live-chip"><b></b> Live</span>
+      <div class="dashboard-reference">
+        <div class="ref-card">
+          <div class="ref-head"><div><span>LIVE MONITORING</span><h3>Live Patient Monitoring</h3></div><span>● LIVE</span></div>
+          <div class="ecg-wrap">
+            <div class="ecg-box">
+              <svg class="ecg-line" viewBox="0 0 900 160" preserveAspectRatio="none"><polyline fill="none" points="0,82 45,82 58,82 68,58 76,126 88,82 125,82 138,68 148,82 188,82 200,82 212,50 220,126 233,82 270,82 285,65 296,82 345,82 358,52 366,125 378,82 422,82 438,68 450,82 495,82 507,48 516,126 528,82 566,82 580,66 592,82 640,82 652,52 660,126 672,82 720,82 735,65 747,82 790,82 804,50 814,126 826,82 900,82"/></svg>
+              <div class="ecg-scan" *ngIf="monitoringLive"></div>
+            </div>
+            <div class="ecg-stats">
+              <div class="ecg-stat"><small>Heart Rate</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.heartRate || 78}} <em>bpm</em></b></div>
+              <div class="ecg-stat"><small>SpO₂</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.oxygen || 98}} <em>%</em></b></div>
+              <div class="ecg-stat"><small>Blood Pressure</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.systolic || 122}}/{{monitorOverview?.patientSnapshots?.[0]?.latest?.diastolic || 80}} <em>mmHg</em></b></div>
+              <div class="ecg-stat"><small>Glucose</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.glucose || 108}} <em>mg/dL</em></b></div>
+            </div>
           </div>
-          <div class="ref-ecg">
-            <div class="ref-ecg-grid"></div>
-            <svg viewBox="0 0 900 180" preserveAspectRatio="none">
-              <polyline [attr.points]="dashboardTrendPolyline()" class="ref-ecg-line"></polyline>
+        </div>
+
+        <div class="ref-card">
+          <div class="ref-head"><div><span>AI RISK</span><h3>AI Risk Overview</h3></div><span>EDUCATIONAL</span></div>
+          <div class="risk-body">
+            <div class="risk-ring"><b>{{risk?.cardiovascular?.score || 24}}%</b><span>{{risk?.cardiovascular?.level || 'Low Risk'}}</span></div>
+            <div><div class="factor"><div class="factor-row"><span>Age</span><b>35%</b></div><div class="factor-bar"><i style="width:35%"></i></div></div><div class="factor"><div class="factor-row"><span>Blood pressure</span><b>28%</b></div><div class="factor-bar"><i style="width:28%"></i></div></div><div class="factor"><div class="factor-row"><span>Glucose</span><b>20%</b></div><div class="factor-bar"><i style="width:20%"></i></div></div><div class="factor"><div class="factor-row"><span>Health history</span><b>17%</b></div><div class="factor-bar"><i style="width:17%"></i></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ref-lower">
+        <div class="ref-card ref-table"><div class="ref-head"><div><span>CLINICAL ALERTS</span><h3>Recent Alerts</h3></div><button type="button" (click)="navigateTo('alerts')">View all</button></div><table><thead><tr><th>Time</th><th>Patient</th><th>Message</th><th>Status</th></tr></thead><tbody><tr *ngFor="let a of alerts | slice:0:4"><td>{{a.createdAt | date:'shortTime'}}</td><td>{{patientName(a.patientId)}}</td><td>{{a.message}}</td><td><span [ngClass]="{'status-critical':a.severity==='CRITICAL','status-warning':a.severity==='WARNING','status-ok':a.severity==='INFO'}">{{a.severity}}</span></td></tr></tbody></table></div>
+        <div class="ref-card ref-table"><div class="ref-head"><div><span>APPOINTMENTS</span><h3>Today’s Appointments</h3></div><button type="button" (click)="navigateTo('appointments')">View all</button></div><table><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Status</th></tr></thead><tbody><tr *ngFor="let a of appointments | slice:0:4"><td>{{a.time}}</td><td>{{a.patientName}}</td><td>{{a.reason || a.specialty}}</td><td><span class="status-ok">{{a.status}}</span></td></tr></tbody></table></div>
+      </div>
+
+      <div class="ref-card care-strip" style="margin-top:14px"><div class="ref-head" style="padding:0 0 8px"><div><span>CARE PLAN</span><h3>Care Plan Progress</h3></div><button type="button" (click)="navigateTo('careplans')">Open M4</button></div><div class="progress-track"><span [style.width.%]="83"></span></div><div class="care-meta"><span>Diabetes Management Plan · Next review {{carePlans?.[0]?.followUpDate || '—'}}</span><b>83% complete</b></div></div>
+
+      <div class="panel analytics-command-panel">
+        <div class="panel-head"><div><span class="card-kicker">OPERATIONS INTELLIGENCE</span><h3>System analytics</h3><p>Live aggregate signals across the clinical workspace.</p></div><button (click)="loadClinicalAnalytics()">↻ Sync analytics</button></div>
+        <div class="analytics-strip"><div><span>Patients</span><b>{{clinicalAnalytics?.patients || 0}}</b></div><div><span>Prescriptions</span><b>{{clinicalAnalytics?.prescriptions || 0}}</b></div><div><span>Medication events</span><b>{{clinicalAnalytics?.medicationEvents || 0}}</b></div><div><span>Low stock</span><b class="warn-number">{{clinicalAnalytics?.lowStock || 0}}</b></div><div><span>Documents</span><b>{{clinicalAnalytics?.documents || 0}}</b></div></div>
+      </div>
+
+      <div class="command-grid">
+        <div class="panel command-panel">
+          <div class="panel-head"><div><h3>Patient command center</h3><p>Jump directly into live clinical workflows.</p></div><span class="command-status">{{patients.length}} records</span></div>
+          <div class="patient-quick" *ngFor="let p of patients | slice:0:4" (click)="selectPatient(p)">
+            <div class="avatar">{{(p.name || 'P').charAt(0)}}</div><div><b>{{p.name}}</b><small>{{p.mrn}} · {{p.conditions?.length || 0}} conditions</small></div><span>›</span>
+          </div>
+        </div>
+        <div class="panel command-panel">
+          <div class="panel-head"><div><h3>Care orchestration</h3><p>M4 treatment workflow connected to M2 risk.</p></div><button type="button" (click)="navigateTo('careplans')">Open M4</button></div>
+          <div class="orchestration"><div><b>{{dash.carePlans || 0}}</b><small>care plans</small></div><div><b>{{dash.activeAlerts || 0}}</b><small>active alerts</small></div><div><b>{{dash.appointments || 0}}</b><small>appointments</small></div></div>
+          <p class="command-note">Generate a personalized demo plan from a selected patient's latest vitals, labs and M2 risk factors, then track progress and adherence.</p>
+        </div>
+      </div>
+
+
+
+      <!-- STYLE 4 ANALYTICS FIGURES -->
+      <div class="style4-analytics-grid">
+        <div class="panel analytics-panel">
+          <div class="analytics-heading">
+            <div>
+              <span class="eyebrow">CLINICAL ACTIVITY</span>
+              <h3>Platform activity overview</h3>
+              <p>Live totals already loaded from the MediSphere dashboard data.</p>
+            </div>
+            <span class="analytics-live"><i></i> LIVE DATA</span>
+          </div>
+
+          <div class="bar-chart">
+            <div class="bar-row">
+              <div class="bar-label"><span>Patients</span><b>{{dash.patients || 0}}</b></div>
+              <div class="bar-track"><span [style.width.%]="dashboardBarWidth(dash.patients)"></span></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label"><span>Appointments</span><b>{{dash.appointments || 0}}</b></div>
+              <div class="bar-track"><span [style.width.%]="dashboardBarWidth(dash.appointments)"></span></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label"><span>Active alerts</span><b>{{dash.activeAlerts || 0}}</b></div>
+              <div class="bar-track alert-track"><span [style.width.%]="dashboardBarWidth(dash.activeAlerts)"></span></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label"><span>Care plans</span><b>{{dash.carePlans || 0}}</b></div>
+              <div class="bar-track care-track"><span [style.width.%]="dashboardBarWidth(dash.carePlans)"></span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel architecture-panel">
+          <div class="analytics-heading">
+            <div>
+              <span class="eyebrow">DIGITAL CARE PIPELINE</span>
+              <h3>Connected clinical workflow</h3>
+            </div>
+          </div>
+          <div class="workflow-figure">
+            <svg viewBox="0 0 620 170" role="img" aria-label="MediSphere clinical workflow">
+              <defs>
+                <linearGradient id="msFlow" x1="0" x2="1">
+                  <stop offset="0%" stop-color="#13a88f"/>
+                  <stop offset="100%" stop-color="#4478d8"/>
+                </linearGradient>
+              </defs>
+              <path class="flow-line" d="M70 85 H550"/>
+              <circle class="flow-node" cx="70" cy="85" r="28"/>
+              <circle class="flow-node" cx="190" cy="85" r="28"/>
+              <circle class="flow-node" cx="310" cy="85" r="28"/>
+              <circle class="flow-node" cx="430" cy="85" r="28"/>
+              <circle class="flow-node" cx="550" cy="85" r="28"/>
+              <circle class="flow-pulse" cx="70" cy="85" r="7"/>
+              <circle class="flow-pulse" cx="190" cy="85" r="7"/>
+              <circle class="flow-pulse" cx="310" cy="85" r="7"/>
+              <circle class="flow-pulse" cx="430" cy="85" r="7"/>
+              <circle class="flow-pulse" cx="550" cy="85" r="7"/>
+              <text x="70" y="137" text-anchor="middle">Patient</text>
+              <text x="190" y="137" text-anchor="middle">Twin</text>
+              <text x="310" y="137" text-anchor="middle">AI Risk</text>
+              <text x="430" y="137" text-anchor="middle">Monitor</text>
+              <text x="550" y="137" text-anchor="middle">Care Plan</text>
             </svg>
           </div>
-          <div class="ref-monitor-values">
-            <div><small>Heart Rate</small><strong>{{dashboardLatestVital?.heartRate || 78}}</strong><span>bpm</span></div>
-            <div><small>SpO₂</small><strong>{{dashboardLatestVital?.oxygen || 98}}</strong><span>%</span></div>
-            <div><small>Blood Pressure</small><strong>{{dashboardLatestVital?.systolic || 122}}/{{dashboardLatestVital?.diastolic || 80}}</strong><span>mmHg</span></div>
-            <div><small>Glucose</small><strong>{{dashboardLatestVital?.glucose || 108}}</strong><span>mg/dL</span></div>
-          </div>
-          <button class="ref-card-link" (click)="tab='monitoring'">Open Live Monitoring →</button>
-        </div>
-
-        <div class="ref-card ref-risk-card">
-          <div class="ref-card-title">
-            <div><h3>AI Risk Overview</h3><p>Latest clinical risk assessment</p></div>
-            <button class="ref-more-btn" (click)="tab='aiRisk'">⋯</button>
-          </div>
-          <div class="ref-risk-layout">
-            <div class="ref-risk-donut" [style.--risk-angle]="((dashboardRiskSnapshot?.cardiovascularScore || 24) * 3.6) + 'deg'">
-              <strong>{{dashboardRiskSnapshot?.cardiovascularScore || 24}}%</strong>
-              <span>{{dashboardRiskSnapshot?.cardiovascularLevel || 'Low Risk'}}</span>
-            </div>
-            <div class="ref-factor-list">
-              <h4>Contributing factors</h4>
-              <div *ngFor="let f of (dashboardRiskSnapshot?.cardiovascularFactors || []).slice(0,4); let idx=index">
-                <div class="ref-factor-label"><span>{{f.feature || ['Age','Blood Pressure','Cholesterol','Smoking History'][idx]}}</span><b>{{factorPercent(f.contribution, [35,28,20,17][idx])}}%</b></div>
-                <i><em [style.width.%]="factorPercent(f.contribution, [35,28,20,17][idx])"></em></i>
-              </div>
-              <ng-container *ngIf="!dashboardRiskSnapshot?.cardiovascularFactors?.length">
-                <div class="ref-factor-label"><span>Age</span><b>35%</b></div><i><em style="width:35%"></em></i>
-                <div class="ref-factor-label"><span>Blood pressure</span><b>28%</b></div><i><em style="width:28%"></em></i>
-                <div class="ref-factor-label"><span>Cholesterol</span><b>20%</b></div><i><em style="width:20%"></em></i>
-                <div class="ref-factor-label"><span>Smoking history</span><b>17%</b></div><i><em style="width:17%"></em></i>
-              </ng-container>
-            </div>
-          </div>
+          <div class="workflow-caption"><span>●</span> Data flows through the M1 → M2 → M3 → M4 clinical workflow.</div>
         </div>
       </div>
 
-      <div class="ref-second-grid">
-        <div class="ref-card ref-table-card">
-          <div class="ref-card-title"><div><h3>Recent Alerts</h3><p>Latest clinical events needing review</p></div><button class="ref-outline-btn" (click)="tab='alerts'">View all</button></div>
-          <div class="ref-table">
-            <div class="ref-table-head"><span>Time</span><span>Patient</span><span>Vital</span><span>Message</span><span>Status</span></div>
-            <div class="ref-table-row" *ngFor="let a of alerts.slice(0,4)" (click)="tab='alerts'">
-              <span>{{a.createdAt | date:'HH:mm'}}</span>
-              <span><b>{{dashboardPatientName(a.patientId)}}</b><small>{{a.patientId || 'MS-00000'}}</small></span>
-              <span>{{a.vital || 'Vital'}}</span>
-              <span>{{a.message}}</span>
-              <span><em [class.warn]="a.severity!=='CRITICAL'">{{a.acknowledged ? 'Acknowledged' : (a.severity || 'Review')}}</em></span>
-            </div>
-            <div class="ref-empty" *ngIf="!alerts.length">No active alerts.</div>
+      <div class="panel registry-panel">
+        <div class="analytics-heading">
+          <div>
+            <span class="eyebrow">PATIENT REGISTRY</span>
+            <h3>Recent patient records</h3>
+            <p>Quick access to existing patient records. Selecting a row opens Patient 360.</p>
           </div>
+          <button type="button" class="table-link" (click)="navigateTo('patients')">View all patients →</button>
         </div>
-
-        <div class="ref-card ref-table-card">
-          <div class="ref-card-title"><div><h3>Today's Appointments</h3><p>Scheduled clinical visits</p></div><button class="ref-outline-btn" (click)="tab='appointments'">View all</button></div>
-          <div class="ref-table ref-appointments-table">
-            <div class="ref-table-head"><span>Time</span><span>Patient</span><span>Type</span><span>Status</span></div>
-            <div class="ref-table-row ref-appt-row" *ngFor="let a of appointments.slice(0,4)">
-              <span>{{a.time || '10:30 AM'}}</span>
-              <span><b>{{a.patientName || 'Rahul Kumar'}}</b></span>
-              <span>{{a.specialty || a.reason || 'General Checkup'}}</span>
-              <span><em class="appt-status">{{a.status || 'Scheduled'}}</em></span>
-            </div>
-            <div class="ref-empty" *ngIf="!appointments.length">No appointments scheduled.</div>
-          </div>
+        <div class="table-wrap">
+          <table class="style4-table">
+            <thead>
+              <tr><th>Patient</th><th>MRN</th><th>Condition</th><th>Blood</th><th>Clinical status</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let p of patients | slice:0:5" (click)="selectPatient(p)">
+                <td><div class="table-patient"><span>{{(p.name || 'P').charAt(0)}}</span><div><b>{{p.name}}</b><small>{{p.gender || '—'}}</small></div></div></td>
+                <td><code>{{p.mrn}}</code></td>
+                <td>{{p.conditions?.[0] || 'No condition recorded'}}</td>
+                <td>{{p.bloodGroup || '—'}}</td>
+                <td><span class="table-status"><i></i> Record available</span></td>
+                <td><button type="button" class="row-open" (click)="$event.stopPropagation(); selectPatient(p)">Open 360</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="empty-table" *ngIf="!patients.length">No patient records loaded.</div>
         </div>
       </div>
 
-      <div class="ref-card ref-care-card">
-        <div class="ref-card-title"><div><h3>Care Plan Progress: {{dashboardCarePlan?.title || 'Diabetes Management'}}</h3><p>{{dashboardCarePlan?.summary || 'Personalized follow-up and treatment plan'}}</p></div><button class="ref-outline-btn" (click)="openCarePlans()">View plan</button></div>
-        <div class="ref-care-row">
-          <div class="ref-progress"><i [style.width.%]="dashboardCarePlan?.progress || 70"></i></div>
-          <strong>{{dashboardCarePlan?.progress || 70}}%</strong>
+      <div class="grid2">
+
+        <div class="panel">
+
+          <h3>
+            Platform workflow
+          </h3>
+
+          <div class="flow">
+
+            <span>
+              Patient Data
+            </span>
+
+            <i>→</i>
+
+            <span>
+              FHIR
+            </span>
+
+            <i>→</i>
+
+            <span>
+              MongoDB
+            </span>
+
+            <i>→</i>
+
+            <span>
+              Digital Twin
+            </span>
+
+            <i>→</i>
+
+            <span>
+              Patient 360
+            </span>
+
+          </div>
+
         </div>
-        <div class="ref-care-meta"><span>{{dashboardCarePlan?.tasks?.length || 2}} of {{dashboardCarePlan?.tasks?.length || 5}} goals completed</span><span>Next review: {{dashboardCarePlan?.followUpDate || '25 Sep 2026'}}</span></div>
+
+
+        <div class="panel">
+
+          <h3>
+            AI risk engine
+          </h3>
+
+          <p>
+            Explainable demo risk scoring is available
+            from a patient profile. It is not a medical diagnosis.
+          </p>
+
+        </div>
+
       </div>
 
+    </section>
+
+    <!-- ================================================= -->
+    <!-- M4 CARE PLAN & TREATMENT -->
+    <!-- ================================================= -->
+    <section *ngIf="tab==='careplans'" class="content careplans-page">
+      <div class="care-hero"><div><span class="eyebrow">MILESTONE 4 · CARE PLAN & TREATMENT</span><h2>Personalized care, tracked end-to-end.</h2><p>Manage goals, treatment actions, adherence, progress, review dates and treatment status for the selected patient.</p></div><div class="care-hero-stat"><b>{{carePlans.length}}</b><span>Plans for selected patient</span><small *ngIf="carePlans.length">{{careActiveCount()}} active · {{careCompletedCount()}} completed</small></div></div>
+      <div class="care-toolbar panel"><div class="care-patient-select"><label>Patient</label><select [(ngModel)]="carePlanPatientId" (change)="loadCarePlans()"><option value="">Select a patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select></div><div class="care-actions"><button type="button" (click)="loadCarePlans()" [disabled]="!carePlanPatientId || carePlanBusy">↻ Refresh</button><button type="button" class="primary" (click)="generateCarePlan()" [disabled]="!carePlanPatientId || carePlanBusy">{{carePlanBusy ? 'Working…' : '✦ Generate from AI Risk'}}</button><button type="button" (click)="openCarePlanForm()" [disabled]="!carePlanPatientId || carePlanBusy">+ New Care Plan</button></div></div>
+      <div class="care-empty panel" *ngIf="!carePlanPatientId"><div class="empty-icon">✚</div><h3>Select a patient to manage M4 care</h3><p>The treatment plan stays linked to the patient record, M2 risk output and MongoDB-backed care-plan API.</p></div>
+      <div class="care-summary-grid" *ngIf="carePlanPatientId"><div class="care-summary-card"><span>Active plans</span><b>{{careActiveCount()}}</b><small>Currently being managed</small></div><div class="care-summary-card"><span>Average progress</span><b>{{careAverageProgress()}}%</b><small>Across selected patient's plans</small></div><div class="care-summary-card"><span>Adherence</span><b>{{careAverageAdherence()}}%</b><small>Current reported adherence</small></div><div class="care-summary-card"><span>Review due</span><b>{{careDueCount()}}</b><small>Due or overdue plans</small></div></div>
+      <div class="care-grid" *ngIf="carePlanPatientId"><article class="care-card care-card-pro" *ngFor="let cp of carePlans">
+        <div class="care-card-head"><div><span class="priority" [ngClass]="priorityClass(cp.priority)">{{cp.priority || 'MEDIUM'}}</span><span class="category">{{cp.category || 'GENERAL'}}</span></div><span class="status-pill" [ngClass]="careStatusClass(cp.status)">{{cp.status || 'ACTIVE'}}</span></div>
+        <div class="care-title-row"><div><h3>{{cp.title}}</h3><small *ngIf="cp.generatedBy">Source: {{cp.generatedBy}}</small></div><span class="review-badge" [ngClass]="careDueClass(cp)">{{careReviewLabel(cp)}}</span></div>
+        <div class="care-goal-box"><span>CARE GOAL</span><p>{{cp.goal}}</p></div>
+        <div class="care-progress-block"><div class="progress-row"><span>Overall progress</span><b>{{cp.progress || 0}}%</b></div><div class="progress-track"><span [style.width.%]="cp.progress || 0"></span></div><div class="progress-quick"><button type="button" (click)="changeCareProgress(cp,-10)" [disabled]="carePlanBusy">−10%</button><button type="button" (click)="changeCareProgress(cp,10)" [disabled]="carePlanBusy">+10%</button></div></div>
+        <div class="care-metrics-row"><div><span>Adherence</span><b>{{cp.adherence || 0}}%</b></div><div><span>Treatment actions</span><b>{{completedActionCount(cp)}}/{{(cp.actions || []).length}}</b></div><div><span>Next review</span><b>{{cp.followUpDate || '—'}}</b></div></div>
+        <div class="treatment-actions-box"><div class="treatment-head"><div><b>Treatment plan</b><small>Mark each action completed to update progress.</small></div><button type="button" (click)="openCarePlanForm(cp)">Edit plan</button></div><label class="treatment-action" *ngFor="let action of cp.actions || []"><input type="checkbox" [checked]="actionDone(action)" (change)="toggleTreatmentAction(cp, action)"><span [class.done-action]="actionDone(action)">{{actionLabel(action)}}</span></label><div class="no-actions" *ngIf="!(cp.actions || []).length">No treatment actions recorded. Edit the plan to add actions.</div></div>
+        <div class="care-quick-actions"><button type="button" (click)="changeCareAdherence(cp,-5)" [disabled]="carePlanBusy">Adherence −5</button><button type="button" (click)="changeCareAdherence(cp,5)" [disabled]="carePlanBusy">Adherence +5</button><button type="button" (click)="setCareStatus(cp,'ACTIVE')" [disabled]="carePlanBusy || cp.status==='ACTIVE'">Start</button><button type="button" (click)="setCareStatus(cp,'ON_HOLD')" [disabled]="carePlanBusy || cp.status==='ON_HOLD'">Pause</button><button type="button" class="complete-plan-btn" (click)="setCareStatus(cp,'COMPLETED')" [disabled]="carePlanBusy || cp.status==='COMPLETED'">Complete</button></div>
+        <div class="care-card-footer"><button type="button" (click)="openCarePlanForm(cp)">Edit details</button><button type="button" class="danger-btn" (click)="deleteCarePlan(cp)">Delete</button></div>
+      </article></div>
+      <div class="care-empty panel" *ngIf="carePlanPatientId && !carePlans.length"><div class="empty-icon">✓</div><h3>No care plan yet</h3><p>Generate a personalized demo plan from the patient's M2 risk data or create a plan manually.</p></div>
+    </section>
+
+    <!-- ================================================= -->
+    <!-- M3 LIVE MONITORING -->
+    <!-- ================================================= -->
+
+    <section *ngIf="tab==='monitoring'" class="content">
+      <div class="monitor-hero">
+        <div>
+          <span class="eyebrow">MILESTONE 3 · REAL-TIME CLINICAL MONITORING</span>
+          <h2>Live patient monitoring</h2>
+          <p>Continuous vital-sign visibility with automatic threshold detection and persistent clinical alerts.</p>
+        </div>
+        <div class="monitor-live"><span class="pulse-dot"></span> LIVE <small>{{monitoringUpdated | date:'mediumTime'}}</small></div>
+      </div>
+
+      <div class="cards">
+        <div class="metric"><span>Patients monitored</span><b>{{monitorOverview.patientsMonitored || 0}}</b><small>With recorded vital streams</small></div>
+        <div class="metric danger"><span>Critical alerts</span><b>{{monitorOverview.criticalAlerts || 0}}</b><small>Immediate attention</small></div>
+        <div class="metric warn"><span>Warning alerts</span><b>{{monitorOverview.warningAlerts || 0}}</b><small>Threshold exceeded</small></div>
+        <div class="metric"><span>Stream status</span><b class="live-text">{{monitoringLive ? 'ONLINE' : 'SYNCING'}}</b><small>Auto refresh every 5 seconds</small></div>
+      </div>
+
+      <div class="monitor-grid">
+        <div class="panel">
+          <div class="panel-head"><div><h3>Patient streams</h3><p>Latest values from MongoDB vital history.</p></div><button (click)="loadMonitoring()">↻ Sync now</button></div>
+          <div class="monitor-patient" *ngFor="let m of monitorOverview.patientSnapshots" [class.selected-monitor]="monitorPatientId===m.patientId" (click)="selectMonitorPatient(m.patientId)">
+            <div class="status-dot" [ngClass]="monitorStatusClass(m.status)"></div>
+            <div class="monitor-patient-main"><b>{{patientName(m.patientId)}}</b><small>MRN {{patientMrn(m.patientId)}} · {{m.updatedAt | date:'short'}}</small></div>
+            <span class="status-pill" [ngClass]="monitorStatusClass(m.status)">{{m.status}}</span>
+            <span class="alert-count" *ngIf="m.activeAlerts">{{m.activeAlerts}} alert{{m.activeAlerts>1?'s':''}}</span>
+          </div>
+          <div class="empty" *ngIf="!monitorOverview.patientSnapshots?.length">No vital streams yet. Open a patient and record a wearable vital.</div>
+        </div>
+
+        <div class="panel" *ngIf="monitorPatient as mp">
+          <div class="panel-head"><div><h3>{{patientName(mp.patientId)}} · Live vitals</h3><p>Patient-specific monitoring view</p></div><div class="monitor-actions"><button (click)="loadMonitorPatient(mp.patientId)">↻ Refresh</button><button class="live-demo-btn" [class.running]="simulationRunning" (click)="toggleLiveSimulation()">{{simulationRunning ? '■ Stop Live Demo' : '▶ Start Live Demo'}}</button></div></div>
+          <div class="vital-grid">
+            <div class="live-vital"><span>Heart Rate</span><b>{{mp.latest?.heartRate ?? '—'}}</b><small>bpm</small><em [ngClass]="monitorStatusClass(valueStatus('heartRate',mp.latest?.heartRate))">{{valueStatus('heartRate',mp.latest?.heartRate)}}</em></div>
+            <div class="live-vital"><span>SpO₂</span><b>{{mp.latest?.oxygen ?? '—'}}</b><small>%</small><em [ngClass]="monitorStatusClass(valueStatus('oxygen',mp.latest?.oxygen))">{{valueStatus('oxygen',mp.latest?.oxygen)}}</em></div>
+            <div class="live-vital"><span>Blood Pressure</span><b>{{mp.latest?.systolic ?? '—'}} / {{mp.latest?.diastolic ?? '—'}}</b><small>mmHg</small><em [ngClass]="monitorStatusClass(valueStatus('bp',mp.latest))">{{valueStatus('bp',mp.latest)}}</em></div>
+            <div class="live-vital"><span>Glucose</span><b>{{mp.latest?.glucose ?? '—'}}</b><small>mg/dL</small><em [ngClass]="monitorStatusClass(valueStatus('glucose',mp.latest?.glucose))">{{valueStatus('glucose',mp.latest?.glucose)}}</em></div>
+            <div class="live-vital"><span>Temperature</span><b>{{mp.latest?.temperature ?? '—'}}</b><small>°C</small><em [ngClass]="monitorStatusClass(valueStatus('temperature',mp.latest?.temperature))">{{valueStatus('temperature',mp.latest?.temperature)}}</em></div>
+          </div>
+
+          <h4>Vital trend</h4>
+          <div class="trend-tabs"><button *ngFor="let k of trendKeys" [class.active]="trendKey===k" (click)="trendKey=k">{{k}}</button></div>
+          <div class="trend-chart live-chart" *ngIf="trendPoints().length">
+            <div class="chart-live-badge"><span class="pulse-dot"></span>{{simulationRunning ? 'LIVE STREAMING' : 'LIVE MONITOR'}}</div>
+            <div class="chart-sweep" *ngIf="simulationRunning"></div>
+            <svg viewBox="0 0 640 190" preserveAspectRatio="none">
+              <polyline [attr.points]="trendPolyline()" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            </svg>
+            <div class="chart-labels"><span>{{trendMin()}}</span><b>{{trendKey}}</b><span>{{trendMax()}}</span></div>
+          </div>
+          <div class="empty" *ngIf="!trendPoints().length">No trend data available.</div>
+          <div class="stream-note"><b>Demo wearable stream:</b> Start Live Demo to generate changing test vitals through the same <code>/vitals</code> API. These readings are simulated and are not real patient measurements.</div>
+
+          <h4>Recent alerts</h4>
+          <div class="monitor-alert" *ngFor="let a of $any(mp.alerts) | slice:0:5">
+            <span class="status-pill" [ngClass]="monitorStatusClass($any(a).severity)">{{$any(a).severity}}</span><div><b>{{$any(a).message}}</b><small>{{$any(a).createdAt | date:'medium'}}</small></div>
+            <button *ngIf="!$any(a).acknowledged" (click)="ack($any(a).id); loadMonitorPatient(mp.patientId)">Acknowledge</button>
+          </div>
+        </div>
+
+        <div class="panel" *ngIf="!monitorPatient">
+          <div class="panel-head"><div><h3>Monitoring controls</h3><p>Select a patient stream to inspect trends and alerts.</p></div></div>
+          <div class="monitor-info"><span>◉</span><div><b>Automatic detection enabled</b><p>Heart rate, SpO₂, blood pressure, glucose and temperature are evaluated against configured monitoring thresholds.</p></div></div>
+          <div class="monitor-info"><span>⚡</span><div><b>Kafka event channel</b><p>Vital events are published to <code>medisphere.vitals</code>. If Kafka is unavailable, the synchronous API path keeps monitoring functional.</p></div></div>
+        </div>
+      </div>
     </section>
 
     <!-- ================================================= -->
@@ -339,12 +575,20 @@ import { forkJoin } from 'rxjs';
               </td>
 
 
-              <td>
+              <td class="patient-actions">
 
                 <button
                   (click)="selectPatient(p)">
 
                   Patient 360
+
+                </button>
+
+                <button
+                  class="danger-btn"
+                  (click)="deletePatient(p)">
+
+                  Delete
 
                 </button>
 
@@ -360,105 +604,6 @@ import { forkJoin } from 'rxjs';
 
     </section>
 
-
-    <!-- ================================================= -->
-    <!-- MILESTONE 4: CARE PLAN & TREATMENT -->
-    <!-- ================================================= -->
-    <section *ngIf="tab==='carePlans'" class="content m4-page">
-      <div class="m4-hero">
-        <div>
-          <span class="eyebrow">MILESTONE 4 · CARE PLAN & TREATMENT</span>
-          <h2>Create and track a patient care plan.</h2>
-          <p>Use the patient record, recent readings and available risk information to prepare a simple follow-up plan.</p>
-        </div>
-        <div class="m4-hero-badge">
-          <span>Care plan</span>
-          <b>ONE PATIENT · ONE PLAN</b>
-        </div>
-      </div>
-
-      <div class="panel m4-selector">
-        <div>
-          <span class="section-kicker">PATIENT</span>
-          <h3>Choose a patient</h3>
-          <p class="muted">The plan uses the patient's existing information and latest readings when available.</p>
-        </div>
-        <div class="m4-selector-actions">
-          <select [(ngModel)]="carePatientId" (change)="loadCarePlans()">
-            <option value="">Select patient</option>
-            <option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option>
-          </select>
-          <button class="primary" (click)="generateCarePlan()" [disabled]="!carePatientId || careBusy">
-            {{careBusy ? 'Creating…' : 'Generate care plan'}}
-          </button>
-          <button (click)="loadCarePlans()" [disabled]="!carePatientId">↻ Refresh</button>
-        </div>
-      </div>
-
-      <div *ngIf="careMessage" class="m4-message">{{careMessage}}</div>
-
-      <div class="m4-overview-grid" *ngIf="carePatientId">
-        <div class="panel m4-patient-card">
-          <div class="m4-card-head"><div><span class="section-kicker">PATIENT CONTEXT</span><h3>{{carePatient?.name || 'Selected patient'}}</h3></div><span class="m4-chip">{{carePatient?.mrn || '—'}}</span></div>
-          <div class="m4-profile-grid">
-            <div><small>Conditions</small><b>{{carePatient?.conditions?.join(', ') || 'No conditions recorded'}}</b></div>
-            <div><small>Blood group</small><b>{{carePatient?.bloodGroup || '—'}}</b></div>
-            <div><small>Latest heart rate</small><b>{{careMonitoring?.latestVital?.heartRate ?? '—'}} bpm</b></div>
-            <div><small>Latest glucose</small><b>{{careMonitoring?.latestVital?.glucose ?? '—'}} mg/dL</b></div>
-          </div>
-        </div>
-
-        <div class="panel m4-progress-card">
-          <div class="m4-card-head"><div><span class="section-kicker">TREATMENT TRACKING</span><h3>{{selectedCarePlan?.title || 'No plan selected'}}</h3></div><span class="m4-risk" [class.m4-risk-high]="selectedCarePlan?.riskLevel==='HIGH'">{{selectedCarePlan?.riskLevel || '—'}}</span></div>
-          <div class="m4-progress-number"><strong>{{selectedCarePlan?.progress ?? 0}}%</strong><span>tasks completed</span></div>
-          <div class="m4-progress-track"><span [style.width.%]="selectedCarePlan?.progress || 0"></span></div>
-          <small class="muted">Follow-up: {{selectedCarePlan?.followUpDate || '—'}}</small>
-        </div>
-      </div>
-
-      <div class="m4-content-grid" *ngIf="carePatientId">
-        <div class="panel m4-plan-panel">
-          <div class="m4-card-head"><div><span class="section-kicker">PERSONALIZED PLAN</span><h3>{{selectedCarePlan?.title || 'Generate a plan to begin'}}</h3></div></div>
-          <div *ngIf="selectedCarePlan" class="care-summary">
-            <p><b>Goal:</b> {{selectedCarePlan.goal}}</p>
-            <p><b>Summary:</b> {{selectedCarePlan.summary}}</p>
-            <p><b>Owner:</b> {{selectedCarePlan.owner}}</p>
-          </div>
-          <div *ngIf="selectedCarePlan?.tasks?.length; else noCareTasks" class="care-task-list">
-            <div *ngFor="let task of selectedCarePlan.tasks; let i=index" class="care-task" [class.completed]="task.completed">
-              <label><input type="checkbox" [checked]="task.completed" (change)="toggleCareTask(i, $any($event.target).checked)"><span><b>{{task.title}}</b><small>{{task.category}}</small></span></label>
-              <span class="care-task-status">{{task.completed ? 'Completed' : 'Pending'}}</span>
-            </div>
-          </div>
-          <ng-template #noCareTasks><div class="empty-small">Generate a care plan for this patient to create treatment and follow-up tasks.</div></ng-template>
-        </div>
-
-        <div class="panel m4-health-panel">
-          <div class="m4-card-head"><div><span class="section-kicker">HEALTH CHECK</span><h3>Latest readings</h3></div><span class="m4-chip">Monitoring</span></div>
-          <div class="health-reading-grid">
-            <div><small>Blood pressure</small><b>{{careMonitoring?.latestVital?.systolic ?? '—'}} / {{careMonitoring?.latestVital?.diastolic ?? '—'}}</b><span>mmHg</span></div>
-            <div><small>SpO₂</small><b>{{careMonitoring?.latestVital?.oxygen ?? '—'}}%</b><span>saturation</span></div>
-            <div><small>Heart rate</small><b>{{careMonitoring?.latestVital?.heartRate ?? '—'}}</b><span>bpm</span></div>
-            <div><small>Glucose</small><b>{{careMonitoring?.latestVital?.glucose ?? '—'}}</b><span>mg/dL</span></div>
-          </div>
-          <div class="m4-comparison" *ngIf="careMonitoring?.recentVitals?.length > 1">
-            <b>Progress check</b>
-            <span>HR {{deltaValue('heartRate')}} · Glucose {{deltaValue('glucose')}}</span>
-          </div>
-          <p class="muted">This section gives the care team a current reading snapshot to review at follow-up.</p>
-        </div>
-      </div>
-
-      <div class="panel m4-history-panel" *ngIf="carePlans.length">
-        <div class="m4-card-head"><div><span class="section-kicker">PLAN HISTORY</span><h3>Previous care plans</h3></div><span class="m4-chip">{{carePlans.length}} plan(s)</span></div>
-        <div class="care-history-row" *ngFor="let c of carePlans; let i=index" (click)="selectCarePlan(c)">
-          <div><b>{{c.title}}</b><small>{{c.goal}}</small></div>
-          <span>{{c.riskLevel || 'ROUTINE'}}</span>
-          <span>{{c.progress || 0}}%</span>
-          <span>{{c.followUpDate || '—'}}</span>
-        </div>
-      </div>
-    </section>
 
     <!-- ================================================= -->
     <!-- PATIENT 360 -->
@@ -1316,9 +1461,10 @@ import { forkJoin } from 'rxjs';
 
           <div class="panel">
 
-            <h3>
-              Care Plans
-            </h3>
+            <div class="panel-head">
+              <div><h3>Care Plans</h3><p>M4 personalized treatment workflow</p></div>
+              <button type="button" (click)="openCarePlansForSelected()">Open M4</button>
+            </div>
 
 
             <div
@@ -1353,11 +1499,38 @@ import { forkJoin } from 'rxjs';
         <!-- AI RISK -->
         <!-- ================================================= -->
 
-        <div *ngIf="risk" class="panel risk">
-          <h3>AI Risk Summary</h3>
-          <div class="risk-summary-line"><b>Cardiovascular: {{risk.cardiovascularLevel}} · {{risk.cardiovascularScore}}/100</b><b>Diabetes: {{risk.diabetesLevel}} · {{risk.diabetesScore}}/100</b></div>
-          <p>Top factors: {{risk.cardiovascularFactors?.[0]?.feature || 'No major factors detected'}}</p>
-          <small>Open <b>AI Risk Lab</b> for feature-level explanations and federated-learning simulation.</small>
+        <div
+          *ngIf="risk"
+          class="panel risk">
+
+          <h3>
+            AI Risk Explanation
+          </h3>
+
+
+          <b>
+
+            {{risk.level}}
+            ·
+            {{risk.score}}/100
+
+          </b>
+
+
+          <p>
+
+            {{risk.explanations?.join(' · ')
+            || 'No major factors detected'}}
+
+          </p>
+
+
+          <small>
+
+            {{risk.note}}
+
+          </small>
+
         </div>
 
 
@@ -1365,187 +1538,176 @@ import { forkJoin } from 'rxjs';
 
     </section>
 
-
-    <!-- ================================================= -->
-    <!-- MILESTONE 2: AI RISK LAB -->
-    <section *ngIf="tab==='aiRisk'" class="content screenshot-ai-page">
-      <div class="ai-page-head">
-        <div>
-          <div class="ai-brandline"><span class="brand-mark">◇</span><span>MEDISPHERE</span><small>COGNITIVE TWIN</small></div>
-          <h2>AI Risk Prediction Engine</h2>
-          <p>TensorFlow Federated (TFF) privacy-preserving risk prediction with SHAP-style explainability across multi-hospital nodes.</p>
-        </div>
-        <div class="ai-head-actions"><button (click)="loadFederated()">⚡ Advanced FL Training Round</button><button class="blue-action" (click)="runRisk(aiPatientId)" [disabled]="!aiPatientId">⟳ Recalculate Models</button></div>
-      </div>
-
-      <div class="ai-kpi-grid">
-        <div class="ai-kpi"><span>Risk Predictions</span><strong>{{riskHistory.length || 342}}</strong><small>Today</small></div>
-        <div class="ai-kpi"><span>Model Accuracy</span><strong>91.4%</strong><small>↑ 2.1% FL round 47</small></div>
-        <div class="ai-kpi"><span>High Risk Patients</span><strong>{{highRiskCount()}}</strong><small>Require intervention</small></div>
-      </div>
-
-      <div class="ai-control-strip">
-        <div><span>Patient</span><select [(ngModel)]="aiPatientId"><option value="">Select patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}}</option></select></div>
-        <div><span>Model</span><b>CVD-Risk-v3.2</b></div>
-        <div><span>Federated Round</span><b>47</b></div>
-        <button class="run-ai" (click)="runRisk(aiPatientId)" [disabled]="!aiPatientId">Run Prediction</button>
-      </div>
-
-      <div *ngIf="risk" class="cvd-card">
-        <div class="cvd-title-row"><div><span class="cyan-tag">TENSORFLOW FEDERATED</span><h3>Cardiovascular Risk Prediction</h3></div><div class="patient-tags"><span>Patient: <b>{{selectedRiskPatientName()}}</b></span><span>Model: <b>CVD-Risk-v3.2</b></span><span>Federated Round: <b>47</b></span></div></div>
-        <div class="input-pills">
-          <span>Age: <b>58</b></span><span>BP: <b>130/85 mmHg</b></span><span>HbA1c: <b>7.2%</b></span><span>LDL: <b>120 mg/dL</b></span><span>eGFR: <b>65 mL/min</b></span><span>Smoking: <b>Yes (Former)</b></span><span>FH: <b>Positive</b></span>
-        </div>
-        <div class="risk-banner"><span>⚠</span><div><b>Prediction: {{risk.cardiovascularScore}}% 10-year CVD Risk | Category: <em>{{risk.cardiovascularLevel}} RISK</em></b><small>Clinical decision-support threshold shown for demonstration.</small></div></div>
-        <div class="shap-head"><b>SHAP Explanation</b><span>Σ SHAP · Base (12.1) → {{risk.cardiovascularScore}} Output</span></div>
-        <div class="factor-bars">
-          <div *ngFor="let f of risk.cardiovascularFactors?.slice(0,5)" class="factor-bar"><div><span>{{f.feature}}</span><b>{{f.contribution > 0 ? '+' : ''}}{{f.contribution}}%</b></div><small>{{f.value}} {{f.unit}}</small><i><span [style.width.%]="barWidth(f.contribution)"></span></i></div>
-        </div>
-      </div>
-
-      <div *ngIf="risk" class="dual-risk">
-        <div class="risk-mini-card"><span>Diabetes Complication Risk</span><strong>{{risk.diabetesScore}}%</strong><em>{{risk.diabetesLevel}}</em><p>Feature contribution view</p></div>
-        <div class="risk-mini-card"><span>Privacy / Method</span><strong>DATA LOCAL</strong><em>FEDERATED DEMO</em><p>{{risk.privacy}}</p></div>
-      </div>
-
-      <div *ngIf="federated" class="fl-strip">
-        <div><b>Federated Learning · Round 47</b><small>Raw patient data remains at each hospital; only model updates are aggregated.</small></div>
-        <div *ngFor="let h of federated.hospitals"><b>{{h.hospital}}</b><span>{{h.samples}} samples · weight {{h.localModelWeight}}</span></div>
-        <strong>Aggregate {{federated.aggregatedModelWeight}}</strong>
-      </div>
-
-      <div *ngIf="riskHistory?.length" class="dark-history">
-        <div class="section-dark-head"><b>Recent Risk Assessments</b><span>Patient history</span></div>
-        <div *ngFor="let r of riskHistory.slice(0,4)" class="dark-history-row"><span>{{r.assessedAt | date:'short'}}</span><b>CV {{r.cardiovascularScore}}</b><em>{{r.cardiovascularLevel}}</em><b>DM {{r.diabetesScore}}</b><em>{{r.diabetesLevel}}</em></div>
-      </div>
-    </section>
-
-    <!-- ================================================= -->
-    <!-- MILESTONE 3 · REAL-TIME MONITORING & ALERTS -->
-    <!-- ================================================= -->
-    <section *ngIf="tab==='monitoring'" class="content">
-      <div class="hero monitoring-hero">
-        <div>
-          <span class="eyebrow">MILESTONE 3 · REAL-TIME MONITORING</span>
-          <h2>Watch patient vitals as they change.</h2>
-          <p>Continuous demo monitoring checks incoming vital readings and creates a clinical alert when a configured threshold is crossed.</p>
-        </div>
-        <div class="hero-icon">♥</div>
-      </div>
-
-      <div class="panel monitoring-controls">
-        <div class="panel-head">
-          <div>
-            <h3>Live monitoring console</h3>
-            <small class="muted">Simulation mode · no physical wearable is required for the demonstration.</small>
-          </div>
-          <span class="monitor-status" [class.running]="monitoringRunning">{{monitoringRunning ? '● Monitoring active' : '○ Monitoring paused'}}</span>
-        </div>
-        <div class="ai-controls">
-          <select [(ngModel)]="monitoringPatientId" (change)="loadMonitoring()">
-            <option value="">Select patient</option>
-            <option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option>
-          </select>
-          <button class="primary" (click)="startMonitoring()" [disabled]="!monitoringPatientId || monitoringRunning">{{monitoringRunning ? '● Monitoring live' : '▶ Start live monitoring'}}</button>
-          <button (click)="stopMonitoring()" [disabled]="!monitoringRunning">Stop</button>
-          <button class="danger-btn" (click)="simulateCritical()" [disabled]="!monitoringPatientId">Simulate HR 145 bpm</button>
-          <button (click)="clearMonitoringView()" [disabled]="!monitoring">Clear view</button>
-        </div>
-      </div>
-
-      <div *ngIf="monitoring" class="cards monitoring-vitals">
-        <div class="metric"><span>Heart Rate</span><b>{{monitoring.latestVital?.heartRate || '—'}}</b><small>bpm</small></div>
-        <div class="metric"><span>Blood Pressure</span><b>{{monitoring.latestVital?.systolic || '—'}} / {{monitoring.latestVital?.diastolic || '—'}}</b><small>mmHg</small></div>
-        <div class="metric"><span>SpO₂</span><b>{{monitoring.latestVital?.oxygen || '—'}}</b><small>% saturation</small></div>
-        <div class="metric"><span>Glucose</span><b>{{monitoring.latestVital?.glucose || '—'}}</b><small>mg/dL</small></div>
-      </div>
-
-      <div *ngIf="monitoring" class="panel live-graph-panel">
-        <div class="panel-head">
-          <div><h3>Live vital trend</h3><small class="muted">Backend-sourced readings · updates while monitoring is running</small></div>
-          <span class="monitor-live" [class.paused]="!monitoringRunning">● {{monitoringRunning ? 'LIVE STREAM' : 'STREAM PAUSED'}}</span>
-        </div>
-        <div class="trend-controls">
-          <button *ngFor="let k of monitorTrendKeys" [class.active-trend]="monitorTrendKey===k" (click)="monitorTrendKey=k">{{trendLabel(k)}}</button>
-        </div>
-        <div class="trend-chart" *ngIf="trendPoints().length; else noTrend">
-          <svg viewBox="0 0 900 260" preserveAspectRatio="none">
-            <line x1="45" y1="20" x2="45" y2="225" class="chart-axis"></line>
-            <line x1="45" y1="225" x2="875" y2="225" class="chart-axis"></line>
-            <polyline [attr.points]="trendPolyline()" class="trend-line"></polyline>
-          </svg>
-          <div class="trend-range"><span>Min {{trendMin()}}</span><b>{{trendLabel(monitorTrendKey)}} · {{monitoring?.latestVital?.[monitorTrendKey] ?? '—'}}</b><span>Max {{trendMax()}}</span></div>
-        </div>
-        <ng-template #noTrend><div class="empty-small">Start live monitoring to stream vital readings into the graph.</div></ng-template>
-      </div>
-
-      <div *ngIf="monitoring" class="grid2">
-        <div class="panel">
-          <div class="panel-head"><h3>Current monitoring status</h3><span class="status-badge" [class.attention]="monitoringStatus()!=='STABLE'">{{monitoringStatus()}}</span></div>
-          <div class="monitor-detail"><span>Source</span><b>{{monitoring.latestVital?.source || '—'}}</b></div>
-          <div class="monitor-detail"><span>Last reading</span><b>{{monitoring.latestVital?.recordedAt | date:'medium'}}</b></div>
-          <div class="monitor-detail"><span>Temperature</span><b>{{monitoring.latestVital?.temperature || '—'}} °C</b></div>
-          <p class="muted">The alert engine evaluates heart rate, oxygen, blood pressure, temperature and glucose for each incoming reading.</p>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head"><h3>Recent alerts</h3><span class="pill">{{monitoringAlerts.length}} shown</span></div>
-          <div *ngIf="!monitoringAlerts.length" class="empty-small">No recent alert for this patient.</div>
-          <div *ngFor="let a of monitoringAlerts" class="alert-card">
-            <div><span class="severity" [class.critical]="a.severity==='CRITICAL'">{{a.severity}}</span><b>{{prettyAlertType(a.type)}}</b></div>
-            <p>{{a.message}}</p>
-            <div class="alert-meta"><span>{{a.observedValue ?? '—'}} {{a.unit || ''}}</span><span>Limit: {{a.threshold || 'configured threshold'}}</span></div>
-            <small>{{a.createdAt | date:'medium'}} · {{a.recipient || 'Care team'}} · {{a.acknowledged ? 'Acknowledged' : 'Awaiting acknowledgement'}}</small>
-            <button *ngIf="!a.acknowledged" class="small-action" (click)="ack(a.id); loadMonitoring()">Acknowledge</button>
-          </div>
-        </div>
-      </div>
-
-      <div *ngIf="monitoring?.recentVitals?.length" class="panel recent-readings-panel">
-        <div class="panel-head"><h3>Recent vital readings</h3><span class="pill">Latest 8</span></div>
-        <div class="readings-list">
-          <div class="reading-row reading-head"><span>Time</span><span>HR</span><span>BP</span><span>SpO₂</span><span>Glucose</span></div>
-          <div *ngFor="let v of monitoring.recentVitals" class="reading-row">
-            <span>{{v.recordedAt | date:'shortTime'}}</span><b>{{v.heartRate ?? '—'}}</b><span>{{v.systolic ?? '—'}}/{{v.diastolic ?? '—'}}</span><span>{{v.oxygen ?? '—'}}%</span><span>{{v.glucose ?? '—'}}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel threshold-panel">
-        <div class="panel-head"><h3>Monitoring thresholds</h3><span class="pill">Demo configuration</span></div>
-        <div class="threshold-grid">
-          <div><b>Heart rate</b><span>High &gt; 120 · Critical &gt; 140 bpm</span></div>
-          <div><b>SpO₂</b><span>High &lt; 92% · Critical &lt; 90%</span></div>
-          <div><b>Systolic BP</b><span>High &gt; 160 · Critical ≥ 180 mmHg</span></div>
-          <div><b>Glucose</b><span>High &gt; 250 · Critical ≥ 300 mg/dL</span></div>
-        </div>
-      </div>
-    </section>
 
     <!-- ================================================= -->
     <!-- APPOINTMENTS -->
     <!-- ================================================= -->
 
-    <section
-      *ngIf="tab==='appointments'"
-      class="content">
-
-
-      <div class="toolbar appointment-toolbar">
-        <div>
-          <h2 class="section-title">Doctor appointments</h2>
-          <small class="muted">Choose a department, doctor, date and an actually available time slot.</small>
-        </div>
+    <section *ngIf="tab==='appointments'" class="content">
+      <div class="appointment-hero">
+        <div><span class="eyebrow">CLINICAL APPOINTMENT SCHEDULER</span><h2>Doctors & availability</h2><p>Select a department, doctor and an available time slot. Bookings are saved through the existing appointment API.</p></div>
         <button class="primary" (click)="addAppointment()">+ New appointment</button>
       </div>
 
-      <div class="doctor-department-grid">
-        <div class="doctor-department-card" *ngFor="let d of appointmentDepartments">
-          <div class="dept-icon">{{d.icon}}</div>
-          <div><b>{{d.name}}</b><small>{{d.description}}</small></div>
-          <span>{{doctorsForDepartment(d.name).length}} doctors</span>
+      <div class="department-strip">
+        <button *ngFor="let d of appointmentDepartments" [class.active]="appointmentDepartment===d" (click)="selectAppointmentDepartment(d)">{{d}}</button>
+      </div>
+
+      <div class="appointment-layout">
+        <div class="panel doctor-panel">
+          <div class="panel-head"><div><h3>{{appointmentDepartment}} specialists</h3><p>Doctors available in this department</p></div><span class="availability-badge">{{filteredDoctors().length}} doctors</span></div>
+          <div class="doctor-card" *ngFor="let d of filteredDoctors()" [class.selected-doctor]="appointmentDoctor?.id===d.id" (click)="selectAppointmentDoctor(d)">
+            <div class="doctor-avatar">{{d.name.replace('Dr. ','').charAt(0)}}</div>
+            <div class="doctor-main"><b>{{d.name}}</b><span>{{d.specialty}}</span><small>{{d.experience}} · {{d.room}}</small></div>
+            <div class="doctor-status"><i></i> Available</div>
+          </div>
+        </div>
+
+        <div class="panel schedule-panel" *ngIf="appointmentDoctor as d">
+          <div class="panel-head"><div><h3>{{d.name}}</h3><p>{{d.specialty}} · {{d.department}}</p></div><span class="live-badge">● SCHEDULE LIVE</span></div>
+          <div class="doctor-schedule-summary"><div><span>Consultation days</span><b>{{d.days.join(' · ')}}</b></div><div><span>Clinic hours</span><b>{{d.hours}}</b></div></div>
+          <label class="date-picker-label">Choose appointment date<input type="date" [(ngModel)]="appointmentForm.date" (ngModelChange)="refreshAppointmentSlots()" [min]="todayDate"></label>
+          <div class="slot-title">Available time slots <small>{{appointmentDayLabel()}}</small></div>
+          <div class="slot-grid" *ngIf="availableAppointmentSlots.length"><button *ngFor="let slot of availableAppointmentSlots" [class.selected-slot]="appointmentForm.time===slot" (click)="appointmentForm.time=slot">{{slot}}</button></div>
+          <div class="empty-slot" *ngIf="!availableAppointmentSlots.length"><b>No slots on this date.</b><span>{{d.name}} is available on {{d.days.join(', ')}}.</span></div>
+          <div class="quick-book" *ngIf="availableAppointmentSlots.length"><div><b>Selected:</b> {{appointmentForm.date || 'Choose date'}} · {{appointmentForm.time || 'Choose time'}}</div><button class="primary" (click)="openNewAppointment(d)">Book with {{d.name}}</button></div>
+        </div>
+
+        <div class="panel schedule-panel empty-doctor" *ngIf="!appointmentDoctor"><div class="empty-icon">◷</div><h3>Select a doctor</h3><p>Choose a doctor from the {{appointmentDepartment}} department to view their weekly schedule and available slots.</p></div>
+      </div>
+
+      <div class="panel table appointment-history">
+        <div class="panel-head"><div><h3>Booked appointments</h3><p>Appointments already stored in MediSphere.</p></div><button (click)="refreshAppointments()">↻ Refresh appointments</button></div>
+        <table><thead><tr><th>Date & time</th><th>Patient</th><th>Doctor</th><th>Department</th><th>Status</th></tr></thead>
+          <tbody><tr *ngFor="let a of appointments"><td>{{a.date}} {{a.time}}</td><td><b>{{a.patientName}}</b></td><td>{{a.doctorName}}</td><td>{{a.specialty}}</td><td><span class="pill">{{a.status || 'SCHEDULED'}}</span></td></tr></tbody>
+        </table>
+        <div class="empty" *ngIf="!appointments.length">No appointments booked yet.</div>
+      </div>
+    </section>
+
+    <!-- APPOINTMENT BOOKING MODAL -->
+    <div class="modal-backdrop" *ngIf="showAppointmentForm" (click)="closeAppointmentForm()">
+      <div class="appointment-modal" (click)="$event.stopPropagation()">
+        <div class="modal-head"><div><span class="eyebrow modal-eyebrow">CONFIRM APPOINTMENT</span><h2>Book consultation</h2><p>{{appointmentDoctor?.name}} · {{appointmentDepartment}}</p></div><button class="close-btn" type="button" (click)="closeAppointmentForm()">×</button></div>
+        <div class="appointment-form-grid">
+          <label>Patient *<select [(ngModel)]="appointmentForm.patientId"><option value="">Select patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select></label>
+          <label>Department<input [value]="appointmentDepartment" readonly></label>
+          <label>Doctor<input [value]="appointmentDoctor?.name || ''" readonly></label>
+          <label>Date<input type="date" [(ngModel)]="appointmentForm.date" [min]="todayDate" (ngModelChange)="refreshAppointmentSlots()"></label>
+          <label>Time<select [(ngModel)]="appointmentForm.time"><option value="">Select time</option><option *ngFor="let slot of availableAppointmentSlots" [value]="slot">{{slot}}</option></select></label>
+          <label>Status<select [(ngModel)]="appointmentForm.status"><option>SCHEDULED</option><option>CONFIRMED</option><option>FOLLOW-UP</option></select></label>
+          <label class="full-field">Reason<input [(ngModel)]="appointmentForm.reason" placeholder="Reason for consultation"></label>
+        </div>
+        <div class="modal-actions"><button type="button" (click)="closeAppointmentForm()">Cancel</button><button class="primary" type="button" [disabled]="savingAppointment" (click)="saveAppointment()">{{savingAppointment ? '⟳ Booking...' : '✓ Confirm appointment'}}</button></div>
+      </div>
+    </div>
+
+    <!-- ================================================= -->
+    <!-- VITALS -->
+    <!-- ================================================= -->
+    <section *ngIf="tab==='vitals'" class="content vitals-page">
+      <div class="section-hero clinical-page-hero">
+        <div>
+          <span class="eyebrow">M1 · WEARABLE CONNECTIVITY</span>
+          <h2>Record a clinical vital</h2>
+          <p>Enter one patient reading. The same API persists it in MongoDB, evaluates M3 thresholds and creates an alert when required.</p>
+        </div>
+        <div class="hero-stat"><span>Patient-linked</span><b>{{vital.patientId ? patientName(vital.patientId) : 'Not selected'}}</b></div>
+      </div>
+
+      <div class="vitals-layout">
+        <div class="panel vital-entry-card">
+          <div class="panel-head">
+            <div><span class="card-kicker">NEW MEASUREMENT</span><h3>Vital signs</h3><p>Every field is labelled with its unit so the correct value is clear.</p></div>
+            <span class="entry-status">● Ready to record</span>
+          </div>
+
+          <div class="vital-form-grid">
+            <label class="field field-wide">Patient
+              <select [(ngModel)]="vital.patientId">
+                <option value="">Select patient</option>
+                <option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option>
+              </select>
+            </label>
+
+            <label class="field">Heart Rate <span>(bpm)</span>
+              <input type="number" min="20" max="250" [(ngModel)]="vital.heartRate" placeholder="e.g. 78">
+              <small>Typical adult reference: 60–100 bpm</small>
+            </label>
+
+            <label class="field">Systolic BP <span>(mmHg)</span>
+              <input type="number" min="50" max="300" [(ngModel)]="vital.systolic" placeholder="e.g. 120">
+              <small>Enter the upper blood-pressure value</small>
+            </label>
+
+            <label class="field">Diastolic BP <span>(mmHg)</span>
+              <input type="number" min="30" max="200" [(ngModel)]="vital.diastolic" placeholder="e.g. 80">
+              <small>Enter the lower blood-pressure value</small>
+            </label>
+
+            <label class="field">SpO₂ <span>(%)</span>
+              <input type="number" min="50" max="100" [(ngModel)]="vital.oxygen" placeholder="e.g. 98">
+              <small>Oxygen saturation</small>
+            </label>
+
+            <label class="field">Temperature <span>(°C)</span>
+              <input type="number" min="25" max="45" step="0.1" [(ngModel)]="vital.temperature" placeholder="e.g. 36.8">
+              <small>Body temperature</small>
+            </label>
+
+            <label class="field">Blood Glucose <span>(mg/dL)</span>
+              <input type="number" min="20" max="800" [(ngModel)]="vital.glucose" placeholder="e.g. 100">
+              <small>Enter the measured glucose value</small>
+            </label>
+
+            <label class="field">Measurement Source
+              <select [(ngModel)]="vital.source">
+                <option value="MANUAL">Manual entry</option>
+                <option value="WEARABLE">Wearable device</option>
+                <option value="WEARABLE-SIMULATOR">Demo wearable simulator</option>
+              </select>
+              <small>Use simulator only for project demonstration</small>
+            </label>
+          </div>
+
+          <div class="vital-form-footer">
+            <div class="demo-note"><b>Need a critical demo?</b><span>Use the demo button to intentionally load abnormal values. Nothing is saved until you click Save Vital Reading.</span></div>
+            <div class="form-actions">
+              <button type="button" (click)="clearVitalForm()">Clear</button>
+              <button type="button" class="demo-critical-btn" (click)="loadCriticalDemo()">⚠ Load Critical Demo</button>
+              <button type="button" class="primary" [disabled]="vitalSaving" (click)="sendVital()">{{vitalSaving ? 'Saving…' : '✓ Save Vital Reading'}}</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel vital-guide-card">
+          <div class="card-kicker">WHAT THE SYSTEM DOES</div>
+          <h3>From reading to clinical alert</h3>
+          <div class="vital-flow-step"><span>01</span><div><b>Capture</b><small>Patient + five supported vital measurements</small></div></div>
+          <div class="vital-flow-step"><span>02</span><div><b>Persist</b><small>Saved through <code>POST /vitals</code></small></div></div>
+          <div class="vital-flow-step"><span>03</span><div><b>Evaluate</b><small>M3 threshold service checks abnormal values</small></div></div>
+          <div class="vital-flow-step"><span>04</span><div><b>Alert</b><small>Critical/warning alerts appear in Clinical Alerts</small></div></div>
+          <div class="vital-flow-step"><span>05</span><div><b>Monitor</b><small>Reading becomes part of the patient trend history</small></div></div>
+          <button type="button" class="guide-link" (click)="navigateTo('monitoring')">Open Live Monitoring →</button>
         </div>
       </div>
+
+      <div class="panel recent-vitals-card" *ngIf="vital.patientId">
+        <div class="panel-head"><div><span class="card-kicker">PATIENT HISTORY</span><h3>Recent readings · {{patientName(vital.patientId)}}</h3></div><button type="button" (click)="loadRecentVitalHistory()">↻ Refresh history</button></div>
+        <div class="recent-vital-row" *ngFor="let v of recentVitalHistory | slice:0:5">
+          <span>{{v.recordedAt | date:'short'}}</span><b>{{v.heartRate ?? '—'}} bpm</b><b>{{v.systolic ?? '—'}} / {{v.diastolic ?? '—'}} mmHg</b><b>{{v.oxygen ?? '—'}}%</b><b>{{v.temperature ?? '—'}} °C</b><b>{{v.glucose ?? '—'}} mg/dL</b>
+        </div>
+        <div class="empty-small" *ngIf="!recentVitalHistory.length">No previous vital readings for this patient.</div>
+      </div>
+    </section>
+
+    <!-- ================================================= -->
+    <!-- ALERTS -->
+    <!-- ================================================= -->
+
+    <section
+      *ngIf="tab==='alerts'"
+      class="content">
 
 
       <div class="panel table">
@@ -1557,24 +1719,22 @@ import { forkJoin } from 'rxjs';
             <tr>
 
               <th>
-                Date
+                Severity
               </th>
 
               <th>
-                Patient
+                Type
               </th>
 
               <th>
-                Doctor
+                Message
               </th>
 
               <th>
-                Specialty
+                Created
               </th>
 
-              <th>
-                Status
-              </th>
+              <th></th>
 
             </tr>
 
@@ -1584,32 +1744,40 @@ import { forkJoin } from 'rxjs';
           <tbody>
 
             <tr
-              *ngFor="let a of appointments">
+              *ngFor="let a of alerts">
 
               <td>
 
-                {{a.date}}
-                {{a.time}}
+                <span
+                  class="severity"
+                  [class.critical]="a.severity==='CRITICAL'">
 
-              </td>
+                  {{a.severity}}
 
-              <td>
-                {{a.patientName}}
-              </td>
-
-              <td>
-                {{a.doctorName}}
-              </td>
-
-              <td>
-                {{a.specialty}}
-              </td>
-
-              <td>
-
-                <span class="pill">
-                  {{a.status}}
                 </span>
+
+              </td>
+
+              <td>
+                {{a.type}}
+              </td>
+
+              <td>
+                {{a.message}}
+              </td>
+
+              <td>
+                {{a.createdAt | date:'short'}}
+              </td>
+
+              <td>
+
+                <button
+                  (click)="ack(a.id)">
+
+                  Acknowledge
+
+                </button>
 
               </td>
 
@@ -1625,114 +1793,15 @@ import { forkJoin } from 'rxjs';
 
 
     <!-- ================================================= -->
-    <!-- VITALS -->
-    <!-- ================================================= -->
-
-    <section
-      *ngIf="tab==='vitals'"
-      class="content">
-
-
-      <div class="panel">
-
-        <h3>
-          Wearable / Vital Ingestion
-        </h3>
-
-
-        <p>
-
-          Record a vital and the backend persists it,
-          publishes a Kafka event and creates an alert
-          when thresholds are crossed.
-
-        </p>
-
-
-        <div class="form-grid">
-
-
-          <input
-            [(ngModel)]="vital.patientId"
-            placeholder="Patient ID">
-
-
-          <input
-            type="number"
-            [(ngModel)]="vital.heartRate"
-            placeholder="Heart rate">
-
-
-          <input
-            type="number"
-            [(ngModel)]="vital.systolic"
-            placeholder="Systolic">
-
-
-          <input
-            type="number"
-            [(ngModel)]="vital.diastolic"
-            placeholder="Diastolic">
-
-
-          <input
-            type="number"
-            [(ngModel)]="vital.oxygen"
-            placeholder="SpO₂">
-
-
-          <input
-            type="number"
-            [(ngModel)]="vital.glucose"
-            placeholder="Glucose">
-
-        </div>
-
-
-        <button
-          class="primary"
-          (click)="sendVital()">
-
-          Send wearable event
-
-        </button>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================================================= -->
-    <!-- ALERTS -->
-    <section *ngIf="tab==='alerts'" class="content screenshot-alerts-page">
-      <div class="alert-page-head"><div><span class="eyebrow">MILESTONE 3 · STREAM & ANOMALY</span><h2>Alerts & Telemetry</h2><p>Review abnormal vital-sign events and escalate cardiac alerts to the clinical response team.</p></div><span class="monitor-live">● LIVE STREAM</span></div>
-      <div class="alert-summary-grid"><div><span>Open Alerts</span><strong>{{alerts.length}}</strong></div><div><span>Critical</span><strong>{{criticalAlertCount()}}</strong></div><div><span>Patients Monitored</span><strong>{{patients.length}}</strong></div></div>
-      <div class="dark-alert-table">
-        <div class="alert-table-head"><span>Severity</span><span>Patient</span><span>Signal</span><span>Value</span><span>Created</span><span>Action</span></div>
-        <div *ngFor="let a of alerts" class="alert-table-row"><span><b class="severity-dot" [class.critical-dot]="a.severity==='CRITICAL'"></b>{{a.severity}}</span><b>{{a.patientName || 'Patient'}}</b><span>{{a.type || 'CARDIAC'}}</span><span>{{a.observedValue ?? '—'}} {{a.unit || ''}}</span><span>{{a.createdAt | date:'short'}}</span><span><button (click)="ack(a.id)">Acknowledge</button><button class="escalate-btn" (click)="openEscalation(a)">Escalate</button></span></div>
-        <div *ngIf="!alerts.length" class="empty-dark">No active alerts. Use Live Monitoring to simulate HR 145 bpm.</div>
-      </div>
-    </section>
-
-    <div *ngIf="escalationOpen" class="modal-backdrop">
-      <div class="escalation-modal">
-        <button class="modal-close" (click)="closeEscalation()">×</button>
-        <h3>⚠ Escalate Cardiac Alert</h3>
-        <p>Escalating will dispatch a priority clinical notification to the selected emergency response team and record the event in the demonstration audit trail.</p>
-        <label>Escalation Target Team:</label>
-        <select [(ngModel)]="escalationTeam"><option>Rapid Response Team (Cardiac/Code Blue)</option><option>Chief On-Call Cardiologist (Dr. Vance)</option><option>Cath Lab Emergency Interventional Team</option><option>ICU Critical Care Attending</option></select>
-        <div class="modal-actions"><button (click)="closeEscalation()">Cancel</button><button class="dispatch-btn" (click)="dispatchEscalation()">Dispatch Priority Escalation</button></div>
-      </div>
-    </div>
-
     <!-- PHARMACY -->
     <!-- ================================================= -->
 
-    <section
-      *ngIf="tab==='pharmacy'"
-      class="content">
-
-
+    <section *ngIf="tab==='pharmacy'" class="content">
+      <div class="section-hero clinical-page-hero neon-hero">
+        <div><span class="eyebrow">PHARMACY OPERATIONS</span><h2>Medication inventory & safety</h2><p>Live inventory from MongoDB with low-stock visibility and a direct path into prescription safety workflows.</p></div>
+        <div class="hero-stat"><span>Low stock</span><b>{{lowStockMedicineCount()}}</b></div>
+      </div>
+      <div class="cards pharmacy-metrics"><div class="metric"><span>Total medicines</span><b>{{medicines.length}}</b><small>Catalogued</small></div><div class="metric warn"><span>Low stock</span><b>{{lowStockMedicineCount()}}</b><small>At or below reorder level</small></div><div class="metric"><span>Prescription workspace</span><b>Ready</b><small>Doctor review required</small></div></div>
       <div class="panel table">
 
         <table>
@@ -1760,6 +1829,9 @@ import { forkJoin } from 'rxjs';
               <th>
                 Price
               </th>
+              <th>Batch</th>
+              <th>Expiry</th>
+              <th>Status</th>
 
             </tr>
 
@@ -1790,6 +1862,9 @@ import { forkJoin } from 'rxjs';
               <td>
                 ₹{{m.price}}
               </td>
+              <td>{{m.batchNumber || '—'}}</td>
+              <td>{{m.expiryDate || '—'}}</td>
+              <td><span class="pill" [class.success]="!medicineStockLow(m)">{{medicineStockLow(m) ? 'LOW STOCK' : 'AVAILABLE'}}</span></td>
 
             </tr>
 
@@ -1951,48 +2026,165 @@ import { forkJoin } from 'rxjs';
 
     </section>
 
-    <!-- PATIENT CREATE MODAL -->
-    <div *ngIf="patientFormOpen" class="modal-backdrop">
-      <div class="form-modal">
-        <button class="modal-close" (click)="cancelNewPatient()">×</button>
-        <h3>Add new patient</h3>
-        <p class="muted">Create a complete patient record. The form is saved through the existing /api/patients endpoint.</p>
-        <div class="modal-form-grid">
-          <label>MRN<input [(ngModel)]="patientForm.mrn" placeholder="MS-10001"></label>
-          <label>Full name<input [(ngModel)]="patientForm.name" placeholder="Patient name"></label>
-          <label>Gender<select [(ngModel)]="patientForm.gender"><option>Male</option><option>Female</option><option>Other</option></select></label>
-          <label>Date of birth<input type="date" [(ngModel)]="patientForm.dateOfBirth"></label>
-          <label>Phone<input [(ngModel)]="patientForm.phone" placeholder="+91..."></label>
-          <label>Email<input [(ngModel)]="patientForm.email" type="email" placeholder="patient@email.com"></label>
-          <label>Blood group<select [(ngModel)]="patientForm.bloodGroup"><option value="">Select</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></label>
-          <label>Emergency contact<input [(ngModel)]="patientForm.emergencyContact" placeholder="Emergency contact"></label>
-          <label class="wide-field">Address<input [(ngModel)]="patientForm.address" placeholder="Address"></label>
-          <label class="wide-field">Allergies<input [(ngModel)]="patientForm.allergiesText" placeholder="e.g. Penicillin, Dust"></label>
-          <label class="wide-field">Conditions<input [(ngModel)]="patientForm.conditionsText" placeholder="e.g. Hypertension, Diabetes"></label>
+    <!-- ================================================= -->
+    <!-- ADVANCED CLINICAL INTELLIGENCE HUB -->
+    <!-- ================================================= -->
+    <section *ngIf="tab==='clinical'" class="content clinical-hub">
+      <div class="section-hero clinical-page-hero neon-hero">
+        <div>
+          <span class="eyebrow">MEDISPHERE · CLINICAL INTELLIGENCE</span>
+          <h2>One command center for care.</h2>
+          <p>Prescriptions, medication safety, labs, documents, adherence, notifications and AI clinical support are connected to the selected patient.</p>
         </div>
-        <div class="modal-actions"><button (click)="cancelNewPatient()">Cancel</button><button class="primary" [disabled]="savingPatient" (click)="saveNewPatient()">{{savingPatient ? 'Saving…' : 'Create patient'}}</button></div>
+        <div class="hero-orbit"><span>AI</span><i></i><b></b></div>
+      </div>
+
+      <div class="hub-toolbar panel">
+        <label class="hub-patient-select">Patient
+          <select [(ngModel)]="clinicalPatientId" (ngModelChange)="loadClinicalPatient($event)">
+            <option value="">Select patient</option>
+            <option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option>
+          </select>
+        </label>
+        <div class="hub-actions">
+          <button type="button" (click)="loadClinicalPatient(clinicalPatientId)">↻ Sync patient</button>
+          <button type="button" (click)="loadPatientQr()">Patient QR</button><button type="button" class="primary" (click)="addVital()">+ Record vital</button>
+          <button type="button" (click)="navigateTo('appointments')">Book appointment</button>
+        </div>
+      </div>
+
+      <div class="hub-grid" *ngIf="clinicalPatientId">
+        <div class="panel ai-assistant-panel">
+          <div class="panel-head"><div><span class="card-kicker">AI CLINICAL ASSISTANT</span><h3>Ask about this patient</h3><p>Answers are generated from the patient's stored MediSphere data.</p></div><span class="ai-live">● CONTEXT LINKED</span></div>
+          <textarea [(ngModel)]="assistantQuestion" rows="3" placeholder="e.g. Summarize the patient, explain the current risk, or review medicines."></textarea>
+          <div class="hub-actions"><button class="primary" [disabled]="assistantBusy || !assistantQuestion.trim()" (click)="askAssistant()">{{assistantBusy ? 'Thinking…' : 'Ask MediSphere AI'}}</button><button (click)="assistantQuestion='Summarize this patient'">Use summary prompt</button></div>
+          <div class="assistant-answer" *ngIf="assistantAnswer"><b>{{assistantAnswer.title}}</b><p>{{assistantAnswer.answer}}</p><div class="answer-chips"><span *ngFor="let x of assistantAnswer.highlights">{{x}}</span></div><small>{{assistantAnswer.disclaimer}}</small></div>
+        </div>
+
+        <div class="panel risk-command-panel">
+          <div class="panel-head"><div><span class="card-kicker">PATIENT SIGNAL</span><h3>Live clinical snapshot</h3></div><button (click)="runRisk(clinicalPatientId)">Run risk</button></div>
+          <div class="signal-row"><span>Latest HR</span><b>{{latest(clinicalData?.vitals)?.heartRate || '—'}} <small>bpm</small></b></div>
+          <div class="signal-row"><span>BP</span><b>{{latest(clinicalData?.vitals)?.systolic || '—'}} / {{latest(clinicalData?.vitals)?.diastolic || '—'}}</b></div>
+          <div class="signal-row"><span>SpO₂</span><b>{{latest(clinicalData?.vitals)?.oxygen || '—'}}%</b></div>
+          <div class="signal-row"><span>Active medicines</span><b>{{clinicalData?.prescriptions?.length || 0}}</b></div>
+          <div class="signal-row"><span>Lab reports</span><b>{{clinicalData?.labs?.length || 0}}</b></div>
+          <div class="risk-inline" *ngIf="risk"><strong>{{risk.level}}</strong><span>{{risk.score}}% risk score</span></div>
+        </div>
+      </div>
+
+      <div class="hub-grid" *ngIf="clinicalPatientId">
+        <div class="panel">
+          <div class="panel-head"><div><span class="card-kicker">SMART PRESCRIBING</span><h3>Prescription workspace</h3><p>Doctor review is required before a medication becomes an active prescription.</p></div><span class="pill success">FHIR MedicationRequest</span></div>
+          <div class="hub-form-grid">
+            <label>Medicine<select [(ngModel)]="prescriptionForm.medicineName"><option value="">Select medicine</option><option *ngFor="let m of medicines" [value]="m.name">{{m.name}} · {{m.strength}}</option></select></label>
+            <label>Strength<input [(ngModel)]="prescriptionForm.strength" placeholder="500 mg"></label>
+            <label>Dosage<input [(ngModel)]="prescriptionForm.dosage" placeholder="1 tablet"></label>
+            <label>Frequency<select [(ngModel)]="prescriptionForm.frequency"><option>Once daily</option><option>Twice daily</option><option>Three times daily</option><option>As needed</option></select></label>
+            <label>Timing<select [(ngModel)]="prescriptionForm.timing"><option>Before meal</option><option>After meal</option><option>With meal</option><option>At bedtime</option></select></label>
+            <label>Duration (days)<input type="number" min="1" [(ngModel)]="prescriptionForm.durationDays"></label>
+            <label class="full-field">Diagnosis / clinical context<input [(ngModel)]="prescriptionForm.diagnosis" placeholder="e.g. Type 2 Diabetes"></label>
+            <label class="full-field">Instructions<textarea [(ngModel)]="prescriptionForm.instructions" rows="2" placeholder="Additional instructions"></textarea></label>
+          </div>
+          <div class="hub-actions"><button class="primary" [disabled]="prescriptionBusy" (click)="createPrescription()">{{prescriptionBusy ? 'Saving…' : 'Create prescription'}}</button><button (click)="recommendMedicines()">Suggest options</button></div>
+          <div class="recommendation-box" *ngIf="medicineRecommendations.length"><div class="rec-head"><b>Decision-support suggestions</b><small>Clinician approval required</small></div><div class="rec-item" *ngFor="let r of medicineRecommendations"><div><b>{{r.medicine}} {{r.strength}}</b><small>{{r.category}} · stock {{r.stock}}</small></div><span [class.warn-text]="r.warning">{{r.warning || 'No rule conflict found'}}</span><button (click)="useRecommendation(r)">Use</button></div></div>
+          <div class="rx-list"><div class="rx-item" *ngFor="let rx of clinicalData?.prescriptions"><div><b>{{rx.medicineName}} {{rx.strength}}</b><small>{{rx.dosage}} · {{rx.frequency}} · {{rx.durationDays}} days</small></div><span class="pill success">{{rx.status}}</span><button (click)="recordMedicationEvent(rx,'TAKEN')">✓ Taken</button><button (click)="recordMedicationEvent(rx,'MISSED')">Missed</button></div><div class="empty-small" *ngIf="!clinicalData?.prescriptions?.length">No active prescriptions for this patient.</div></div>
+        </div>
+
+        <div class="panel safety-panel">
+          <div class="panel-head"><div><span class="card-kicker">MEDICATION SAFETY</span><h3>Interaction checker</h3><p>Rule-based safety checks in the current demo knowledge base.</p></div><span class="safety-orb">✓</span></div>
+          <label>Medicine A<input [(ngModel)]="interactionA" placeholder="e.g. Warfarin"></label>
+          <label>Medicine B<input [(ngModel)]="interactionB" placeholder="e.g. Aspirin"></label>
+          <button class="primary full-btn" (click)="checkInteraction()">Check interaction</button>
+          <div class="interaction-result" *ngIf="interactionResult" [class.danger]="!interactionResult.safe"><b>{{interactionResult.safe ? 'No known rule hit' : 'Potential interaction detected'}}</b><p>{{interactionResult.message}}</p><span *ngFor="let x of interactionResult.interactions">{{x.severity}} · {{x.message}}</span></div>
+        </div>
+      </div>
+
+      <div class="hub-grid" *ngIf="clinicalPatientId">
+        <div class="panel">
+          <div class="panel-head"><div><span class="card-kicker">LAB INTELLIGENCE</span><h3>Record & review results</h3></div><button (click)="loadClinicalPatient(clinicalPatientId)">↻ Refresh</button></div>
+          <div class="hub-form-grid compact">
+            <label>Test name<input [(ngModel)]="labForm.testName" placeholder="HbA1c"></label><label>Result<input [(ngModel)]="labForm.result" placeholder="7.8"></label><label>Unit<input [(ngModel)]="labForm.unit" placeholder="%"></label><label>Reference range<input [(ngModel)]="labForm.referenceRange" placeholder="4.0–5.6"></label>
+          </div>
+          <button class="primary" [disabled]="labBusy" (click)="saveLab()">{{labBusy ? 'Saving…' : 'Save lab result'}}</button>
+          <div class="data-list"><div *ngFor="let l of clinicalLabs"><span><b>{{l.testName}}</b><small>{{l.collectedAt | date:'medium'}}</small></span><strong>{{l.result}} {{l.unit}}</strong></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><div><span class="card-kicker">DOCUMENT VAULT</span><h3>Medical documents</h3><p>Store document metadata now; the record is patient-linked and auditable.</p></div></div>
+          <div class="hub-form-grid compact"><label>Document name<input [(ngModel)]="documentForm.name" placeholder="Blood report Oct 2026"></label><label>Type<select [(ngModel)]="documentForm.documentType"><option>LAB_REPORT</option><option>PRESCRIPTION</option><option>X_RAY</option><option>MRI</option><option>CT_SCAN</option><option>DISCHARGE_SUMMARY</option><option>OTHER</option></select></label><label class="full-field">Description<textarea [(ngModel)]="documentForm.description" rows="2"></textarea></label>
+            <label class="full-field">Upload file<input type="file" (change)="onDocumentFile($event)" accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx"></label></div>
+          <button class="primary" [disabled]="documentBusy" (click)="saveDocument()">{{documentBusy ? 'Uploading…' : 'Upload & link document'}}</button>
+          <div class="data-list"><div *ngFor="let d of clinicalData?.documents"><span><b>{{d.name}}</b><small>{{d.documentType}} · {{d.uploadedAt | date:'medium'}}</small></span><span class="pill">Linked</span></div><div class="empty-small" *ngIf="!clinicalData?.documents?.length">No documents linked.</div></div>
+        </div>
+      </div>
+
+      <div class="panel qr-panel" *ngIf="qrImage">
+        <div class="panel-head"><div><span class="card-kicker">PATIENT IDENTITY</span><h3>Secure patient QR</h3><p>Scan the patient payload inside your MediSphere workflow.</p></div><button (click)="qrImage=''">Close</button></div>
+        <div class="qr-content"><img [src]="qrImage" alt="Patient QR code"><div><b>{{clinicalData?.patient?.name}}</b><p>{{qrPayload}}</p><button (click)="copyQrPayload()">Copy payload</button></div></div>
+      </div>
+
+      <div class="panel notification-panel">
+        <div class="panel-head"><div><span class="card-kicker">CARE SIGNALS</span><h3>Notification center</h3></div><button (click)="loadClinicalNotifications()">↻ Refresh</button></div>
+        <div class="notification-grid"><div class="notification-card" *ngFor="let n of clinicalNotifications | slice:0:8" [class.unread]="!n.read"><span class="notification-dot"></span><div><b>{{n.title}}</b><p>{{n.message}}</p><small>{{n.createdAt | date:'short'}}</small></div><button *ngIf="!n.read" (click)="markNotificationRead(n.id)">Mark read</button></div><div class="empty-small" *ngIf="!clinicalNotifications.length">No new clinical notifications.</div></div>
+      </div>
+    </section>
+
+    <!-- ================================================= -->
+    <!-- M4 CARE PLAN MODAL -->
+    <!-- ================================================= -->
+    <div class="modal-backdrop" *ngIf="carePlanFormOpen" (click)="closeCarePlanForm()">
+      <div class="care-modal" (click)="$event.stopPropagation()">
+        <div class="modal-head"><div><span class="eyebrow modal-eyebrow">MILESTONE 4 · TREATMENT</span><h2>{{editingCarePlan ? 'Edit Care Plan' : 'Create Care Plan'}}</h2><p>Persisted to MongoDB through the M4 Care Plan API.</p></div><button class="close-btn" type="button" (click)="closeCarePlanForm()">×</button></div>
+        <div class="care-form-grid">
+          <label>Patient<select [(ngModel)]="carePlanForm.patientId"><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select></label>
+          <label>Title<input [(ngModel)]="carePlanForm.title" placeholder="e.g. Diabetes Management Plan"></label>
+          <label>Category<select [(ngModel)]="carePlanForm.category"><option>GENERAL</option><option>PREVENTIVE</option><option>CARDIOVASCULAR</option><option>DIABETES</option><option>RECOVERY</option></select></label>
+          <label>Priority<select [(ngModel)]="carePlanForm.priority"><option>LOW</option><option>MEDIUM</option><option>HIGH</option></select></label>
+          <label>Status<select [(ngModel)]="carePlanForm.status"><option>ACTIVE</option><option>ON_HOLD</option><option>COMPLETED</option></select></label>
+          <label>Follow-up date<input type="date" [(ngModel)]="carePlanForm.followUpDate"></label>
+          <label>Progress %<input type="number" min="0" max="100" [(ngModel)]="carePlanForm.progress"></label>
+          <label>Adherence %<input type="number" min="0" max="100" [(ngModel)]="carePlanForm.adherence"></label>
+          <label class="full-field">Goal<textarea [(ngModel)]="carePlanForm.goal" rows="3" placeholder="Define the measurable care objective"></textarea></label>
+          <label class="full-field">Treatment actions<textarea [(ngModel)]="carePlanForm.actionsText" rows="6" placeholder="One action per line"></textarea></label>
+        </div>
+        <div class="modal-actions"><button type="button" (click)="closeCarePlanForm()">Cancel</button><button type="button" class="primary" [disabled]="carePlanBusy" (click)="saveCarePlan()">{{carePlanBusy ? 'Saving…' : 'Save Care Plan'}}</button></div>
       </div>
     </div>
 
-    <!-- APPOINTMENT BOOKING MODAL -->
-    <div *ngIf="appointmentFormOpen" class="modal-backdrop">
-      <div class="form-modal appointment-modal">
-        <button class="modal-close" (click)="closeAppointmentForm()">×</button>
-        <h3>Schedule appointment</h3>
-        <p class="muted">Doctors and slots are separated by department. Already-booked slots are removed automatically.</p>
-        <div class="modal-form-grid">
-          <label>Department<select [(ngModel)]="appointmentForm.specialty" (change)="onAppointmentDepartmentChange()"><option value="">Select department</option><option *ngFor="let d of appointmentDepartments" [value]="d.name">{{d.name}}</option></select></label>
-          <label>Doctor<select [(ngModel)]="appointmentForm.doctorName" (change)="onAppointmentDoctorChange()" [disabled]="!appointmentForm.specialty"><option value="">Select doctor</option><option *ngFor="let d of availableDoctors()" [value]="d.name">{{d.name}} · {{d.experience}}y</option></select></label>
-          <label>Patient<select [(ngModel)]="appointmentForm.patientId"><option value="">Select patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select></label>
-          <label>Date<input type="date" [(ngModel)]="appointmentForm.date" (change)="onAppointmentDateChange()"></label>
+    <!-- ================================================= -->
+    <!-- ADD PATIENT MODAL -->
+    <!-- ================================================= -->
+    <div class="modal-backdrop" *ngIf="showPatientForm" (click)="cancelNewPatient()">
+      <div class="patient-modal" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <span class="eyebrow modal-eyebrow">PATIENT REGISTRATION</span>
+            <h2>Add New Patient</h2>
+            <p>Create a complete patient record and store it in MongoDB.</p>
+          </div>
+          <button class="close-btn" type="button" (click)="cancelNewPatient()">×</button>
         </div>
-        <div class="slot-section" *ngIf="appointmentForm.doctorName">
-          <div class="slot-head"><b>Available consultation times</b><span>{{availableSlots().length}} available</span></div>
-          <div class="slot-grid"><button type="button" *ngFor="let slot of availableSlots()" [class.selected-slot]="appointmentForm.time===slot" (click)="appointmentForm.time=slot">{{slot}}</button></div>
-          <div *ngIf="!availableSlots().length" class="empty-small">No slots remain for this doctor on the selected date.</div>
+
+        <div class="patient-form-grid">
+          <label>MRN<input [(ngModel)]="newPatientForm.mrn" placeholder="Medical Record Number"></label>
+          <label>Full Name *<input [(ngModel)]="newPatientForm.name" placeholder="Patient name"></label>
+          <label>Gender<select [(ngModel)]="newPatientForm.gender"><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select></label>
+          <label>Date of Birth<input type="date" [(ngModel)]="newPatientForm.dateOfBirth"></label>
+          <label>Phone<input [(ngModel)]="newPatientForm.phone" placeholder="+91"></label>
+          <label>Email<input type="email" [(ngModel)]="newPatientForm.email" placeholder="patient@example.com"></label>
+          <label>Blood Group<select [(ngModel)]="newPatientForm.bloodGroup"><option value="">Select</option><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></label>
+          <label>Emergency Contact<input [(ngModel)]="newPatientForm.emergencyContact" placeholder="Emergency contact"></label>
+          <label class="full-field">Address<input [(ngModel)]="newPatientForm.address" placeholder="Full address"></label>
+          <label class="full-field">Allergies<input [(ngModel)]="newPatientForm.allergiesText" placeholder="e.g. Penicillin, Dust"></label>
+          <label class="full-field">Medical Conditions<input [(ngModel)]="newPatientForm.conditionsText" placeholder="e.g. Diabetes, Hypertension"></label>
         </div>
-        <label class="reason-field">Reason<textarea [(ngModel)]="appointmentForm.reason" rows="3" placeholder="Reason for visit / consultation"></textarea></label>
-        <div class="modal-actions"><button (click)="closeAppointmentForm()">Cancel</button><button class="primary" [disabled]="savingAppointment || !appointmentForm.patientId || !appointmentForm.doctorName || !appointmentForm.time" (click)="saveAppointment()">{{savingAppointment ? 'Booking…' : 'Confirm appointment'}}</button></div>
+
+        <div class="modal-actions">
+          <button type="button" (click)="cancelNewPatient()">Cancel</button>
+          <button type="button" class="primary" [disabled]="savingPatient" (click)="saveNewPatient()">
+            {{savingPatient ? 'Saving…' : 'Create Patient'}}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2350,7 +2542,6 @@ td small{
 .risk b{
   color:#0b8f7b;
 }
-.risk-summary-line{display:flex;gap:18px;flex-wrap:wrap}.risk-summary-line b{color:#0b8f7b}
 
 .severity{
   font-size:10px;
@@ -2551,7 +2742,8 @@ pre{
 }
 
 
-.section-title{margin:0 0 4px;font-size:18px}.muted{color:#7b8d99;font-size:11px}.appointment-toolbar{align-items:center}.doctor-department-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.doctor-department-card{background:#fff;border:1px solid #e3ecef;border-radius:14px;padding:14px;display:flex;align-items:center;gap:10px}.doctor-department-card .dept-icon{width:34px;height:34px;border-radius:10px;background:#e8f7f4;color:#078575;display:grid;place-items:center;font-weight:800}.doctor-department-card b{display:block;font-size:12px}.doctor-department-card small{display:block;color:#84949e;font-size:9px;margin-top:3px}.doctor-department-card>span{margin-left:auto;color:#078575;font-size:9px;font-weight:800}.live-graph-panel{margin-top:18px}.trend-controls{display:flex;gap:7px;margin:10px 0}.trend-controls button{font-size:11px;padding:7px 10px}.trend-controls .active-trend{background:#0c9f8a;color:#fff;border-color:#0c9f8a}.trend-chart{height:260px;border:1px solid #e5edf1;border-radius:12px;background:linear-gradient(#fbfefe,#f6fbfa);padding:8px}.trend-chart polyline{transition:points .65s ease-in-out}.trend-chart svg{width:100%;height:220px}.chart-axis{stroke:#cad9de;stroke-width:1}.trend-line{fill:none;stroke:#0b9f8b;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 3px 3px rgba(0,150,130,.18))}.trend-range{display:flex;justify-content:space-between;align-items:center;color:#80929c;font-size:10px}.trend-range b{color:#0b806f}.monitor-live{font-size:10px;color:#078575;font-weight:800;letter-spacing:.7px}.monitor-live.paused{color:#8b9aa4}.form-modal{width:min(760px,92vw);max-height:90vh;overflow:auto;background:#fff;border-radius:18px;padding:24px;position:relative;box-shadow:0 25px 80px rgba(0,0,0,.25)}.form-modal h3{margin:0 0 6px;font-size:21px}.modal-form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.modal-form-grid label,.reason-field{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;color:#536a78}.modal-form-grid input,.modal-form-grid select,.reason-field textarea{padding:11px;border:1px solid #d6e3e8;border-radius:9px;font:inherit;color:#284354;background:#fff}.wide-field{grid-column:1/-1}.reason-field{margin-top:14px}.slot-section{margin-top:18px;padding:14px;background:#f7fbfb;border:1px solid #e0ecec;border-radius:12px}.slot-head{display:flex;justify-content:space-between;margin-bottom:10px;font-size:11px}.slot-head span{color:#078575}.slot-grid{display:flex;gap:7px;flex-wrap:wrap}.slot-grid button{font-size:11px}.slot-grid .selected-slot{background:#0c9f8a;color:#fff;border-color:#0c9f8a}.appointment-modal{max-width:820px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}.modal-close{position:absolute;right:13px;top:10px;background:transparent!important;border:0!important;color:#7a8e9a!important;font-size:22px;padding:4px 8px}.modal-actions button{padding:10px 14px}.modal-actions .primary:disabled{opacity:.55;cursor:not-allowed}@media(max-width:1100px){.doctor-department-grid{grid-template-columns:repeat(2,1fr)}}
+.patient-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.danger-btn{border-color:#f0caca!important;color:#b32828!important;background:#fff7f7!important}.danger-btn:hover{background:#ffeaea!important;border-color:#e8aaaa!important}
+
 @media(max-width:900px){
 
   aside{
@@ -2579,9 +2771,6 @@ pre{
 
 }
 
-
-
-.ai-hero{margin-bottom:16px}.ai-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.ai-controls select{min-width:260px;padding:11px;border:1px solid #d9e5eb;border-radius:8px;background:white}.primary{background:#0b8f7b!important;color:white!important;border-color:#0b8f7b!important}.muted{display:block;margin-top:10px;color:#72828b}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.ai-risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}.risk-score-card{background:white;border:1px solid #dce8ed;border-radius:14px;padding:20px;box-shadow:0 5px 18px rgba(24,55,72,.05)}.risk-score-card span{display:block;color:#71808a;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.risk-score-card strong{display:block;font-size:42px;margin:8px 0;color:#163b49}.risk-score-card strong small{font-size:15px;color:#87939a}.risk-score-card b{display:inline-block;background:#e7f7f3;color:#087b6d;border-radius:20px;padding:6px 10px;font-size:11px}.risk-score-card b.moderate{background:#fff2d8;color:#9b6200}.risk-score-card b.high{background:#ffe3e0;color:#a62318}.factor-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #edf2f4}.factor-row:last-child{border-bottom:0}.factor-row b{display:block}.factor-row small{display:block;color:#80909a;margin-top:3px}.factor-row>span{font-weight:800;color:#a62318}.factor-row>span.down{color:#0b8f7b}.privacy-panel{margin-top:16px}.federated-panel{margin-top:16px}.federated-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}.hospital-card{border:1px solid #dce8ed;border-radius:12px;padding:14px;background:#fbfdfd}.hospital-card span,.hospital-card small{display:block;color:#75858e;margin-top:5px}.hospital-card strong{display:block;font-size:24px;margin-top:8px}.aggregate{padding:12px;background:#edf7f5;border-radius:10px}.history-row{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;padding:11px 0;border-bottom:1px solid #edf2f4;font-size:12px}.history-row:last-child{border-bottom:0}
 
 @media(max-width:600px){
 
@@ -2612,255 +2801,2045 @@ pre{
 
 }
 
-.monitoring-hero{margin-bottom:16px}.monitoring-controls{margin-bottom:16px}.monitor-status{font-size:12px;color:#71808a;font-weight:800}.monitor-status.running{color:#0b8f7b}.danger-btn{border-color:#d9aaa5!important;color:#a62318!important;background:#fff7f6!important}.monitoring-vitals{margin-bottom:16px}.status-badge{font-size:11px;font-weight:800;padding:6px 10px;border-radius:20px;background:#e7f7f3;color:#087b6d}.status-badge.attention{background:#ffe3e0;color:#a62318}.monitor-detail{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #edf2f4;font-size:13px}.monitor-detail span{color:#7b8b94}.alert-card{padding:12px 0;border-bottom:1px solid #edf2f4}.alert-card:last-child{border-bottom:0}.alert-card b{margin-left:8px;font-size:12px}.alert-card p{margin:7px 0 4px;font-size:12px}.alert-card small{color:#7c8b93}.alert-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#697b84;margin:6px 0}.small-action{font-size:10px;padding:6px 9px;margin-top:7px}.recent-readings-panel{margin-top:16px}.readings-list{margin-top:10px}.reading-row{display:grid;grid-template-columns:1.4fr .7fr 1fr .8fr 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #edf2f4;font-size:12px}.reading-row:last-child{border-bottom:0}.reading-head{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#7a8a93;font-weight:800}.threshold-panel{margin-top:16px}.threshold-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.threshold-grid div{background:#f8fbfc;border:1px solid #e0eaee;border-radius:10px;padding:13px}.threshold-grid b,.threshold-grid span{display:block}.threshold-grid span{font-size:11px;color:#72828b;margin-top:6px;line-height:1.5}.risk-history-card{border:1px solid #e1eaee;border-radius:12px;padding:14px;margin-top:12px}.history-top{display:flex;justify-content:space-between;font-size:12px}.history-top span{color:#7d8c95}.history-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.history-metrics>div{background:#f8fbfc;border-radius:10px;padding:12px}.history-metrics small{display:block;color:#75858e;font-size:10px;text-transform:uppercase;letter-spacing:.04em}.history-metrics strong{display:block;font-size:19px;margin:5px 0}.level-badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:10px;font-weight:800;background:#e7f7f3;color:#087b6d}.level-badge.moderate{background:#fff2d8;color:#9b6200}.level-badge.high{background:#ffe3e0;color:#a62318}.history-note{font-size:10px;color:#82919a}.severity{display:inline-block;padding:5px 8px;border-radius:20px;background:#fff2d8;color:#9b6200;font-size:10px;font-weight:800}.severity.critical{background:#ffe3e0;color:#a62318}
-@media(max-width:900px){.threshold-grid{grid-template-columns:1fr 1fr}.history-metrics{grid-template-columns:1fr}}
 
-/* =====================================================
-   DASHBOARD REDESIGN
-   ===================================================== */
-.dashboard-page{max-width:1500px;margin:0 auto}
-.dash-hero{display:grid;grid-template-columns:1fr 220px;gap:18px;margin-bottom:18px;background:linear-gradient(135deg,#09283a 0%,#0b5360 55%,#0b8e7d 100%);border-radius:22px;padding:30px;color:#fff;box-shadow:0 14px 32px rgba(11,55,70,.12)}
-.dash-hero .eyebrow{color:#a9e5dc;font-weight:800;letter-spacing:2px}
-.dash-hero h2{font-size:31px;margin:9px 0 7px;letter-spacing:-.6px}
-.dash-hero p{max-width:680px;color:#d7ecef;line-height:1.6;margin:0}
-.hero-actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
-.hero-actions button{font-size:12px;padding:11px 15px;border-radius:10px}
-.hero-primary{background:#fff!important;color:#0a6f68!important;border:0!important}
-.hero-secondary{background:rgba(255,255,255,.08)!important;color:#fff!important;border:1px solid rgba(255,255,255,.22)!important}
-.dash-date-card{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:18px;display:flex;flex-direction:column;justify-content:center;text-align:center}
-.dash-date-card span{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#b8d9de}.dash-date-card strong{font-size:48px;line-height:1;margin:5px 0}.dash-date-card b{font-size:12px}.dash-date-card small{margin-top:15px;color:#b8d9de}.dash-date-card em{font-style:normal;color:#b8f0df}
-.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
-.stat-card{background:#fff;border:1px solid #e2ebef;border-radius:16px;padding:17px;cursor:pointer;transition:.18s;box-shadow:0 5px 18px rgba(20,50,65,.03)}
-.stat-card:hover{transform:translateY(-2px);box-shadow:0 9px 22px rgba(20,50,65,.08)}
-.stat-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.stat-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:900}.stat-link{font-size:10px;color:#82949d}.stat-card small{display:block;color:#748691;font-size:11px}.stat-card strong{display:block;font-size:30px;margin:3px 0}.stat-card>span:last-child{font-size:10px;color:#9aa8ae}.stat-patients .stat-icon{background:#e8f6f4;color:#087b6d}.stat-appointments .stat-icon{background:#eef3ff;color:#496db3}.stat-alerts .stat-icon{background:#fff0ed;color:#b94b3d}.stat-medicines .stat-icon{background:#f2eefb;color:#7254a1}
-.dashboard-main-grid{display:grid;grid-template-columns:1.35fr .85fr;gap:18px}.dashboard-bottom-grid{display:grid;grid-template-columns:1.35fr .85fr;gap:18px;margin-top:18px}
-.section-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:13px}.section-heading h3{margin:3px 0 3px}.section-heading p{margin:0;color:#87969f;font-size:11px}.section-kicker{font-size:9px;letter-spacing:1.5px;color:#0b907f;font-weight:900}
-.patient-roster-row{display:flex;align-items:center;gap:12px;padding:13px 5px;border-bottom:1px solid #edf2f4;cursor:pointer}.patient-roster-row:last-child{border-bottom:0}.patient-avatar{width:40px;height:40px;border-radius:12px;background:#e5f5f2;color:#08796d;display:grid;place-items:center;font-size:11px;font-weight:900}.patient-roster-info{flex:1}.patient-roster-info b{display:block;font-size:13px}.patient-roster-info span{display:block;color:#82929b;font-size:10px;margin-top:3px}.record-chip{font-size:9px;padding:5px 8px;border-radius:20px;background:#f1f8f6;color:#398277}.roster-arrow{color:#9aabb3;font-size:15px}
-.attention-panel{background:#fbfdfd}.signal-card{display:flex;align-items:center;gap:10px;border:1px solid #e4ecef;border-radius:12px;padding:12px;margin-top:9px;cursor:pointer}.signal-card>div{flex:1}.signal-icon{width:31px;height:31px;border-radius:9px;display:grid;place-items:center;font-weight:900}.signal-card b{display:block;font-size:11px}.signal-card small{display:block;color:#85949c;font-size:10px;margin-top:3px}.signal-card i{font-style:normal;color:#9aabb3}.signal-red .signal-icon{background:#fff0ed;color:#b94b3d}.signal-teal .signal-icon{background:#e7f7f3;color:#087b6d}.signal-blue .signal-icon{background:#eef3ff;color:#496db3}
-.appointment-modern{display:flex;align-items:center;gap:15px;padding:12px 5px;border-bottom:1px solid #edf2f4}.appointment-modern:last-child{border-bottom:0}.appointment-time{width:65px}.appointment-time b{display:block;font-size:12px}.appointment-time span{display:block;font-size:9px;color:#8999a1;margin-top:3px}.appointment-person{flex:1}.appointment-person b{display:block;font-size:12px}.appointment-person span{display:block;font-size:10px;color:#82929b;margin-top:3px}.appointment-status{font-size:9px;font-weight:900;padding:5px 8px;border-radius:15px;background:#edf7f5;color:#087b6d}
-.quick-action-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.quick-action-grid button{display:grid;grid-template-columns:28px 1fr;text-align:left;align-items:center;padding:11px;border-radius:11px;background:#f9fbfc}.quick-action-grid button span{grid-row:span 2;width:26px;height:26px;border-radius:8px;background:#e8f5f3;color:#087b6d;display:grid;place-items:center}.quick-action-grid button b{font-size:11px}.quick-action-grid button small{font-size:9px;color:#87979f}.dashboard-note{margin-top:18px;border:1px solid #dcebe8;background:#f5fbfa;border-radius:13px;padding:12px 15px;display:flex;align-items:center;gap:10px}.dashboard-note>span{color:#0b9b86}.dashboard-note div{flex:1}.dashboard-note b{display:block;font-size:11px;color:#235467}.dashboard-note small{display:block;color:#82949d;font-size:9px;margin-top:3px}.dashboard-note em{font-size:9px;color:#75878f;font-style:normal}
-@media(max-width:1000px){.stat-grid{grid-template-columns:1fr 1fr}.dashboard-main-grid,.dashboard-bottom-grid{grid-template-columns:1fr}.dash-hero{grid-template-columns:1fr}.dash-date-card{display:none}}
-@media(max-width:600px){.stat-grid{grid-template-columns:1fr}.quick-action-grid{grid-template-columns:1fr}.dashboard-note{align-items:flex-start;flex-wrap:wrap}.dashboard-note em{width:100%;margin-left:19px}}
+.monitor-hero{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:26px 28px;border:1px solid #dcebea;border-radius:22px;background:linear-gradient(135deg,#effbf8,#f7fbff);margin-bottom:20px}.monitor-hero h2{margin:6px 0;font-size:30px}.monitor-hero p{margin:0;color:#667781}.monitor-live{padding:10px 14px;border-radius:999px;background:#fff;border:1px solid #cfe4e0;font-weight:800;color:#087c6b;white-space:nowrap}.monitor-live small{font-weight:500;color:#71818a;margin-left:8px}.pulse-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#10a88f;box-shadow:0 0 0 5px #d9f5ee;margin-right:6px}.danger{border-color:#f2d1d1!important}.live-text{font-size:18px!important;color:#0b9a84}.monitor-grid{display:grid;grid-template-columns:1fr 1.35fr;gap:20px}.panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:16px}.panel-head h3{margin:0}.panel-head p{margin:5px 0 0;color:#75858d;font-size:13px}.monitor-patient{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid #e5eeee;border-radius:14px;margin-bottom:9px;cursor:pointer;transition:.15s}.monitor-patient:hover,.selected-monitor{border-color:#b9ddd7;background:#f4fbf9}.status-dot{width:10px;height:10px;border-radius:50%;flex:none}.status-dot.normal{background:#16a085}.status-dot.warning{background:#e7a22b}.status-dot.critical{background:#dc5a5a}.monitor-patient-main{flex:1;display:flex;flex-direction:column}.monitor-patient-main small,.monitor-alert small{color:#7b8990;margin-top:3px}.status-pill{font-size:10px;font-weight:800;padding:5px 8px;border-radius:999px}.status-pill.normal{background:#e4f7f2;color:#087e6c}.status-pill.warning{background:#fff1d5;color:#9b6700}.status-pill.critical{background:#ffe3e3;color:#b32828}.alert-count{font-size:11px;color:#9b6700}.vital-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.live-vital{position:relative;border:1px solid #e3eeee;border-radius:15px;padding:14px;background:#fbfefe}.live-vital span,.live-vital small{display:block;color:#73828a;font-size:12px}.live-vital b{display:block;font-size:22px;margin:8px 0 2px}.live-vital em{font-style:normal;font-size:10px;font-weight:800}.trend-tabs{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap}.trend-tabs button{border:1px solid #dbe7e6;background:#fff;border-radius:9px;padding:7px 10px}.trend-tabs button.active{background:#0c9f8a;color:#fff;border-color:#0c9f8a}.trend-chart{height:210px;border:1px solid #e2eceb;border-radius:14px;padding:10px;background:linear-gradient(#fff,#f7fcfb)}.trend-chart svg{width:100%;height:175px;color:#0b9a84}.chart-labels{display:flex;justify-content:space-between;color:#75858d;font-size:11px}.chart-labels b{color:#243b45}.monitor-alert{display:flex;align-items:center;gap:10px;border-top:1px solid #edf1f1;padding:11px 0}.monitor-alert>div{flex:1;display:flex;flex-direction:column}.monitor-alert button{font-size:11px}.monitor-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.live-demo-btn{border:1px solid #0c9f8a!important;color:#087e6c!important;background:#eefaf7!important}.live-demo-btn.running{background:#fff0f0!important;border-color:#e0a0a0!important;color:#b32828!important}.live-chart{position:relative;overflow:hidden}.chart-live-badge{position:absolute;top:8px;right:10px;z-index:2;font-size:10px;font-weight:800;color:#087e6c;background:#e8f8f4;border:1px solid #cfeee7;border-radius:999px;padding:5px 8px}.chart-sweep{position:absolute;top:0;bottom:22px;width:2px;background:linear-gradient(transparent,#0c9f8a,transparent);box-shadow:0 0 10px rgba(12,159,138,.35);animation:monitorSweep 2.2s linear infinite;z-index:1;opacity:.8}@keyframes monitorSweep{from{left:2%}to{left:98%}}.stream-note{margin-top:10px;padding:10px 12px;border:1px dashed #cfe3e1;border-radius:10px;background:#f8fcfb;color:#6f8088;font-size:11px;line-height:1.5}.stream-note b{color:#35515c}.stream-note code{font-size:10px}.monitor-info{display:flex;gap:13px;padding:16px;border:1px solid #e2eceb;border-radius:14px;margin-bottom:12px;background:#fbfefe}.monitor-info>span{font-size:20px}.monitor-info p{margin:5px 0 0;color:#708089;font-size:13px;line-height:1.5}@media(max-width:900px){.monitor-grid{grid-template-columns:1fr}.vital-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.monitor-hero{flex-direction:column;align-items:flex-start}.vital-grid{grid-template-columns:1fr}}
 
-/* =====================================================
-   MILESTONE 4 · CARE PLAN & TREATMENT
-   ===================================================== */
-.m4-page{max-width:1500px;margin:0 auto;background:radial-gradient(circle at 70% 0%,rgba(24,79,110,.12),transparent 40%)}
-.m4-hero{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:16px;padding:25px 27px;border:1px solid #214158;border-radius:13px;background:linear-gradient(120deg,#0b2232,#0d5e66 55%,#0f8175);color:#fff}.m4-hero h2{margin:9px 0 6px;font-size:25px}.m4-hero p{margin:0;color:#d2edf0;max-width:760px;font-size:11px;line-height:1.6}.m4-hero-badge{padding:13px 16px;border:1px solid rgba(255,255,255,.22);border-radius:9px;background:rgba(255,255,255,.08);min-width:180px}.m4-hero-badge span{display:block;font-size:8px;color:#a7d9d6}.m4-hero-badge b{display:block;margin-top:5px;font-size:10px;letter-spacing:.8px}.m4-selector{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:14px;background:#0c1826!important}.m4-selector h3,.m4-card-head h3{margin:4px 0;color:#f0f7ff}.m4-selector-actions{display:flex;gap:8px;align-items:center}.m4-selector-actions select{min-width:260px;background:#111f2e;border:1px solid #2a4056;color:#dceaf5;border-radius:6px;padding:9px;font-size:10px}.m4-selector-actions button{font-size:9px}.m4-selector-actions button:disabled{opacity:.45;cursor:not-allowed}.m4-message{margin:0 0 14px;padding:10px 12px;border:1px solid #285247;border-radius:7px;background:#0d2825;color:#78d8c4;font-size:9px}.m4-overview-grid,.m4-content-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:12px;margin-bottom:12px}.m4-content-grid{align-items:start}.m4-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.m4-chip,.m4-risk{padding:5px 8px;border-radius:12px;background:#112a3b;border:1px solid #2a4358;color:#8fb1c6;font-size:8px;white-space:nowrap}.m4-risk{color:#62d3bf;background:#10312f;border-color:#1e5c54;text-transform:uppercase}.m4-risk-high{color:#ff9ca4;background:#341b24;border-color:#66333d}.m4-profile-grid,.health-reading-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:14px}.m4-profile-grid>div,.health-reading-grid>div{padding:11px;border-radius:8px;border:1px solid #20364b;background:#101f2f}.m4-profile-grid small,.health-reading-grid small{display:block;color:#70889e;font-size:8px;margin-bottom:4px}.m4-profile-grid b,.health-reading-grid b{display:block;color:#dbeaf5;font-size:10px}.health-reading-grid span{display:block;color:#70889e;font-size:7px;margin-top:3px}.m4-progress-number{display:flex;align-items:flex-end;gap:8px;margin:13px 0 8px}.m4-progress-number strong{font-size:34px;color:#eef7fb}.m4-progress-number span{font-size:9px;color:#70889e;margin-bottom:4px}.m4-progress-track{height:8px;background:#142738;border-radius:8px;overflow:hidden;border:1px solid #21394e}.m4-progress-track span{display:block;height:100%;background:#22b7a1;border-radius:8px;transition:width .35s}.m4-plan-panel,.m4-health-panel,.m4-history-panel{background:#0c1826!important}.care-summary{padding:11px;border:1px solid #1e3347;border-radius:8px;background:#0f1d2b;margin:12px 0}.care-summary p{margin:5px 0;color:#7f95a8;font-size:9px;line-height:1.6}.care-summary b{color:#d4e7f3}.care-task-list{margin-top:8px}.care-task{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-top:1px solid #1b2f41}.care-task label{display:flex;align-items:center;gap:9px;flex:1;cursor:pointer}.care-task input{accent-color:#20b6a0}.care-task b{display:block;color:#dce9f4;font-size:10px}.care-task small{display:block;color:#6f889e;font-size:8px;margin-top:3px}.care-task-status{font-size:8px;color:#8fa8ba;padding:4px 7px;border-radius:10px;background:#111f2d;border:1px solid #243a50}.care-task.completed b{text-decoration:line-through;color:#8fa7b7}.care-task.completed .care-task-status{color:#6fe0c8;background:#0f302c;border-color:#245d55}.m4-comparison{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding:10px;border-radius:8px;background:#101f2d;border:1px solid #21364a;font-size:8px;color:#7690a5}.m4-comparison b{color:#dcecf6}.m4-history-panel{margin-top:2px}.care-history-row{display:grid;grid-template-columns:1.7fr .7fr .6fr .7fr;gap:10px;align-items:center;padding:11px 0;border-top:1px solid #182b3c;cursor:pointer}.care-history-row:hover{background:#102030}.care-history-row b{display:block;color:#dceaf5;font-size:10px}.care-history-row small{display:block;color:#6f879b;font-size:8px;margin-top:4px}.care-history-row>span{font-size:8px;color:#88a3b6;text-align:left}.care-history-row>span:nth-last-child(3){color:#50d6be}.m4-page .muted{color:#71899d;font-size:9px}
 
-/* =====================================================
-   SCREENSHOT-STYLE CLINICAL TWIN UI
-   ===================================================== */
-.app{background:#07111d;color:#dce8f5}
-main{background:#07111d;min-height:100vh}
-header{background:#0a1523!important;border-bottom:1px solid #1d2c3d!important;color:#dce8f5!important}
-header h1,header p{color:#dce8f5!important}
-header p{opacity:.65}
-.content{color:#dce8f5}
-.panel,.table{background:#0d1927!important;border-color:#203247!important;color:#dce8f5}
-.panel h3,.panel h4,.section-heading h3{color:#edf5ff}
-.clinical-topnav{height:66px;display:flex;align-items:center;gap:20px;padding:0 22px;background:#07121f;border-bottom:1px solid #203044;position:sticky;top:0;z-index:5}
-.doctor-strip{display:flex;align-items:center;gap:9px;min-width:255px}.doctor-strip b{font-size:12px}.doctor-strip small{display:block;color:#7890a7;font-size:9px;margin-top:2px}.doctor-avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#233a53;color:#65d6ff;font-size:9px;font-weight:800}
-.milestone-nav{display:flex;gap:5px;flex:1}.milestone-nav button{background:transparent!important;border:1px solid transparent!important;color:#8196aa!important;padding:8px 12px!important;border-radius:18px!important;font-size:10px!important}.milestone-nav button.active{border-color:#21b8ff!important;color:#53ccff!important;background:#0e2638!important;box-shadow:0 0 16px rgba(33,184,255,.1)}
-.hipaa-badge{font-size:8px;color:#65e2c5;white-space:nowrap}
-.screenshot-ai-page,.screenshot-alerts-page{max-width:1500px;margin:0 auto;background:radial-gradient(circle at 70% 0%,rgba(24,79,110,.12),transparent 40%)}
-.ai-page-head,.alert-page-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:18px}.ai-brandline{font-size:10px;letter-spacing:1.5px;color:#d8e9f6;font-weight:800;display:flex;align-items:center;gap:7px}.ai-brandline small{font-size:7px;color:#68839a}.brand-mark{color:#36c7ff;font-size:20px}.ai-page-head h2,.alert-page-head h2{font-size:25px;margin:9px 0 4px;color:#f0f7ff}.ai-page-head p,.alert-page-head p{margin:0;color:#7991a7;font-size:11px}.ai-head-actions{display:flex;gap:8px}.ai-head-actions button{background:#102234!important;border:1px solid #2b4056!important;color:#b9d4e9!important;font-size:10px;padding:10px 13px;border-radius:7px}.ai-head-actions .blue-action{background:#0d8de0!important;color:white!important;border-color:#0d8de0!important}
-.ai-kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.ai-kpi{background:linear-gradient(145deg,#0e1d2d,#0a1623);border:1px solid #21364c;border-radius:8px;padding:14px 16px}.ai-kpi span{display:block;color:#7d96aa;font-size:10px}.ai-kpi strong{display:block;font-size:27px;color:#f3f8fc;margin:3px 0}.ai-kpi small{color:#37c4ff;font-size:9px}
-.ai-control-strip{display:flex;gap:14px;align-items:end;background:#0c1826;border:1px solid #203349;border-radius:8px;padding:11px 13px;margin-bottom:14px}.ai-control-strip>div{display:flex;flex-direction:column;gap:4px;min-width:150px}.ai-control-strip span{font-size:8px;color:#6e879e;text-transform:uppercase;letter-spacing:.8px}.ai-control-strip b{font-size:11px;color:#dcebf8}.ai-control-strip select{background:#111f2e;border:1px solid #2a4056;color:#dcebf8;border-radius:5px;padding:7px;font-size:10px}.run-ai{margin-left:auto;background:#0da0ed!important;color:#fff!important;border:0!important;border-radius:5px;padding:8px 15px!important}
-.cvd-card{background:#0b1725;border:1px solid #22374e;border-radius:8px;padding:16px;box-shadow:0 14px 40px rgba(0,0,0,.2)}.cvd-title-row{display:flex;justify-content:space-between;gap:15px;align-items:center}.cyan-tag{background:#0c91c9;color:#fff;padding:4px 7px;border-radius:4px;font-size:8px;font-weight:800}.cvd-title-row h3{display:inline-block;margin:0 0 0 8px;color:#f1f7fc;font-size:16px}.patient-tags{display:flex;gap:6px;flex-wrap:wrap}.patient-tags span{background:#112235;border:1px solid #243c54;border-radius:12px;padding:5px 8px;font-size:8px;color:#7690a7}.patient-tags b{color:#cde3f4}.input-pills{display:flex;gap:5px;flex-wrap:wrap;margin:13px 0}.input-pills span{background:#0f2131;border:1px solid #20384e;border-radius:4px;padding:6px 8px;color:#8299ad;font-size:8px}.input-pills b{color:#d6e7f4}.risk-banner{display:flex;gap:10px;align-items:center;background:#1a2430;border:1px solid #384151;border-radius:5px;padding:11px}.risk-banner>span{color:#ffc44d;font-size:19px}.risk-banner b{font-size:11px;color:#f0f4f8}.risk-banner em{font-style:normal;background:#c9525c;color:white;border-radius:4px;padding:3px 5px;font-size:8px}.risk-banner small{display:block;color:#8193a5;font-size:8px;margin-top:4px}.shap-head{display:flex;justify-content:space-between;margin:14px 0 8px;color:#4acaff;font-size:9px}.shap-head span{color:#71879a}.factor-bars{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.factor-bar{background:#0e1c2a;border:1px solid #1f3449;border-radius:5px;padding:8px}.factor-bar>div{display:flex;justify-content:space-between;gap:4px}.factor-bar span{font-size:8px;color:#b4c7d6}.factor-bar b{font-size:8px;color:#ff7e89}.factor-bar small{display:block;color:#72889a;font-size:7px;margin:5px 0}.factor-bar i{display:block;height:4px;background:#1b2d3e;border-radius:4px;overflow:hidden}.factor-bar i span{display:block;height:100%;background:#ef6e7b}
-.dual-risk{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.risk-mini-card,.fl-strip,.dark-history{background:#0c1826;border:1px solid #20354a;border-radius:8px;padding:13px}.risk-mini-card span{display:block;color:#7890a5;font-size:9px}.risk-mini-card strong{display:block;color:#edf6fd;font-size:22px;margin:3px 0}.risk-mini-card em{font-style:normal;color:#46caff;font-size:8px}.risk-mini-card p{font-size:8px;color:#71889c;line-height:1.5}.fl-strip{display:flex;align-items:center;gap:12px;margin-top:10px}.fl-strip>div{flex:1}.fl-strip b{display:block;color:#d9eaf6;font-size:9px}.fl-strip small,.fl-strip span{display:block;color:#71879a;font-size:8px;margin-top:3px}.fl-strip>strong{color:#43d2ba;font-size:10px}.dark-history{margin-top:10px}.section-dark-head{display:flex;justify-content:space-between;margin-bottom:8px}.section-dark-head b{font-size:10px}.section-dark-head span{font-size:8px;color:#6f869b}.dark-history-row{display:grid;grid-template-columns:1.3fr 1fr .8fr 1fr .8fr;padding:8px 0;border-top:1px solid #182b3d;font-size:8px;align-items:center}.dark-history-row span{color:#71879a}.dark-history-row em{font-style:normal;color:#4ed3bc}
-.alert-page-head{align-items:center}.monitor-live{color:#55d7bc;background:#0c2c2a;border:1px solid #1c6259;border-radius:12px;padding:7px 10px;font-size:8px}.alert-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.alert-summary-grid>div{background:#0c1826;border:1px solid #20354a;border-radius:8px;padding:14px}.alert-summary-grid span{font-size:9px;color:#7890a4}.alert-summary-grid strong{display:block;font-size:25px;color:#f0f6fb;margin-top:4px}.dark-alert-table{background:#0c1826;border:1px solid #20354a;border-radius:8px;overflow:hidden}.alert-table-head,.alert-table-row{display:grid;grid-template-columns:.8fr 1.2fr 1fr .7fr 1fr 1.4fr;gap:8px;padding:11px 13px;align-items:center}.alert-table-head{background:#101f2f;color:#70889c;text-transform:uppercase;font-size:7px;letter-spacing:.8px}.alert-table-row{border-top:1px solid #182b3c;color:#a9bfd0;font-size:8px}.alert-table-row b{color:#e2edf5}.severity-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#f3b34c;margin-right:5px}.critical-dot{background:#ef5c68;box-shadow:0 0 8px rgba(239,92,104,.6)}.alert-table-row button{background:#132437!important;color:#9db5c8!important;border:1px solid #294159!important;border-radius:4px!important;padding:5px 7px!important;font-size:7px!important;margin-right:4px}.alert-table-row .escalate-btn{color:#ffb4bb!important;border-color:#6b3540!important}.empty-dark{padding:35px;text-align:center;color:#70879a;font-size:10px}
-.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);display:grid;place-items:center;z-index:50}.escalation-modal{width:min(500px,90vw);background:#101c2d;border:1px solid #35506d;border-radius:8px;box-shadow:0 25px 80px rgba(0,0,0,.55);padding:22px;color:#dbe8f4;position:relative}.modal-close{position:absolute;right:13px;top:10px;background:transparent!important;border:0!important;color:#8da2b5!important;font-size:18px}.escalation-modal h3{margin:0 0 10px;font-size:16px;color:#fff}.escalation-modal p{font-size:9px;line-height:1.6;color:#8197aa}.escalation-modal label{display:block;color:#91a8bb;font-size:9px;margin:16px 0 5px}.escalation-modal select{width:100%;background:#0a1522;border:1px solid #324a62;color:#d9e7f2;border-radius:4px;padding:9px;font-size:9px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.modal-actions button{padding:8px 12px!important;border-radius:5px!important;font-size:9px!important}.dispatch-btn{background:#edf3f8!important;color:#122335!important;border:0!important}
-@media(max-width:900px){.clinical-topnav{height:auto;flex-wrap:wrap;padding:10px}.milestone-nav{order:3;width:100%;overflow:auto}.ai-kpi-grid,.alert-summary-grid{grid-template-columns:1fr}.factor-bars{grid-template-columns:1fr 1fr}.ai-control-strip{flex-wrap:wrap}.run-ai{margin-left:0}.patient-tags{display:none}.alert-table-head{display:none}.alert-table-row{grid-template-columns:1fr 1fr;padding:12px}.fl-strip{flex-wrap:wrap}}
+
+/* ===================================================== */
+/* ADD PATIENT MODAL */
+/* ===================================================== */
+.modal-backdrop{position:fixed;inset:0;background:rgba(5,24,35,.58);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:24px;z-index:1000}.patient-modal{width:min(760px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(8,35,54,.25);padding:24px}.modal-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid #edf1f3;padding-bottom:18px;margin-bottom:20px}.modal-head h2{margin:6px 0 4px;font-size:24px;color:#17324d}.modal-head p{margin:0;color:#7a8b95;font-size:13px}.modal-eyebrow{color:#0c9f8a!important;opacity:1}.close-btn{border:0!important;background:#f2f6f7!important;border-radius:50%!important;width:36px;height:36px;padding:0!important;font-size:24px;line-height:1}.patient-form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.patient-form-grid label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#536b78}.patient-form-grid input,.patient-form-grid select{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #d9e5eb;border-radius:9px;background:#fff;color:#17324d;font:inherit;font-weight:500;outline:none}.patient-form-grid input:focus,.patient-form-grid select:focus{border-color:#0c9f8a;box-shadow:0 0 0 3px #e2f6f2}.full-field{grid-column:1/-1}.modal-actions{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #edf1f3;padding-top:18px;margin-top:20px}.modal-actions button:disabled{opacity:.55;cursor:not-allowed}@media(max-width:600px){.modal-backdrop{padding:10px}.patient-modal{padding:18px}.patient-form-grid{grid-template-columns:1fr}.full-field{grid-column:auto}}
+
+/* APPOINTMENT SCHEDULER */
+.appointment-hero{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:25px 28px;border:1px solid #dcebea;border-radius:22px;background:linear-gradient(135deg,#effbf8,#f7fbff);margin-bottom:18px}.appointment-hero h2{margin:6px 0;font-size:30px}.appointment-hero p{margin:0;color:#71818a;max-width:720px}.department-strip{display:flex;gap:8px;overflow-x:auto;padding:3px 1px 14px}.department-strip button{white-space:nowrap;border:1px solid #dbe7e6;background:#fff;color:#35505d;border-radius:999px;padding:9px 14px;font-weight:700}.department-strip button.active{background:#0c9f8a;color:#fff;border-color:#0c9f8a}.appointment-layout{display:grid;grid-template-columns:1fr 1.25fr;gap:18px;margin-bottom:18px}.doctor-panel,.schedule-panel{min-height:420px}.availability-badge,.live-badge{font-size:10px;font-weight:800;padding:7px 10px;border-radius:999px;background:#e5f8f3;color:#087e6c}.doctor-card{display:flex;align-items:center;gap:12px;border:1px solid #e3eeee;border-radius:15px;padding:13px;margin-bottom:9px;cursor:pointer;transition:.15s}.doctor-card:hover,.doctor-card.selected-doctor{border-color:#9ed7ce;background:#f2fbf9;box-shadow:0 5px 18px rgba(12,159,138,.08)}.doctor-avatar{width:44px;height:44px;border-radius:13px;background:#e2f5f1;color:#087e6c;display:grid;place-items:center;font-weight:900;font-size:18px}.doctor-main{flex:1;display:flex;flex-direction:column;gap:3px}.doctor-main b{font-size:14px}.doctor-main span{font-size:12px;color:#0b8f7b}.doctor-main small{font-size:11px;color:#7b8990}.doctor-status{font-size:10px;color:#087e6c;font-weight:800}.doctor-status i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#13a986;margin-right:4px}.doctor-schedule-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}.doctor-schedule-summary div{border:1px solid #e2eceb;border-radius:13px;padding:12px;background:#fbfefe}.doctor-schedule-summary span{display:block;color:#7a8a92;font-size:10px;font-weight:800;text-transform:uppercase}.doctor-schedule-summary b{display:block;margin-top:6px;font-size:13px}.date-picker-label{display:flex;flex-direction:column;gap:7px;font-size:11px;font-weight:800;color:#536b78;margin-bottom:18px}.date-picker-label input{padding:11px;border:1px solid #d9e5eb;border-radius:9px;font:inherit;color:#17324d}.slot-title{font-weight:800;margin-bottom:10px}.slot-title small{font-weight:500;color:#7a8a92;margin-left:8px}.slot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.slot-grid button{border:1px solid #dbe7e6;background:#fff;border-radius:9px;padding:9px 7px;color:#35505d;font-weight:700}.slot-grid button:hover,.slot-grid button.selected-slot{background:#0c9f8a;color:#fff;border-color:#0c9f8a}.empty-slot{padding:25px;border-radius:14px;background:#fff8e8;border:1px solid #f1dfb5;color:#866100;display:flex;flex-direction:column;gap:5px}.empty-slot span{font-size:12px}.quick-book{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-top:18px;padding:13px;border-top:1px solid #e9eeee;font-size:12px}.empty-doctor{display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center}.empty-icon{width:58px;height:58px;border-radius:18px;background:#e8f7f4;display:grid;place-items:center;color:#0b9a84;font-size:26px}.empty-doctor p{max-width:420px;color:#75858d;line-height:1.5}.appointment-history{margin-top:8px}.appointment-modal{width:min(720px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(8,35,54,.25);padding:24px}.appointment-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.appointment-form-grid label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#536b78}.appointment-form-grid input,.appointment-form-grid select{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #d9e5eb;border-radius:9px;background:#fff;color:#17324d;font:inherit;font-weight:500;outline:none}.appointment-form-grid input:focus,.appointment-form-grid select:focus{border-color:#0c9f8a;box-shadow:0 0 0 3px #e2f6f2}.appointment-form-grid .full-field{grid-column:1/-1}.appointment-modal .modal-actions button:disabled{opacity:.55;cursor:not-allowed}@media(max-width:1000px){.appointment-layout{grid-template-columns:1fr}}@media(max-width:600px){.appointment-hero{flex-direction:column;align-items:flex-start}.doctor-schedule-summary,.appointment-form-grid{grid-template-columns:1fr}.slot-grid{grid-template-columns:repeat(2,1fr)}.quick-book{flex-direction:column;align-items:flex-start}}
+.command-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin-top:18px}.command-panel{min-height:210px}.command-status{font-size:10px;font-weight:800;color:#0b8f7b;background:#e9f8f4;padding:6px 9px;border-radius:999px}.patient-quick{display:flex;align-items:center;gap:11px;padding:10px;border:1px solid #e8eff1;border-radius:12px;margin-top:8px;cursor:pointer;transition:.15s}.patient-quick:hover{border-color:#b8ddd7;background:#f6fcfa}.patient-quick>div:nth-child(2){flex:1;display:flex;flex-direction:column}.patient-quick small{color:#7b8c94;margin-top:3px}.patient-quick>span{font-size:22px;color:#7b8c94}.avatar{width:32px;height:32px;border-radius:10px;background:#e8f7f4;color:#0b8f7b;display:grid;place-items:center;font-weight:900}.orchestration{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.orchestration div{padding:15px 10px;border:1px solid #e3ecee;border-radius:13px;background:#fbfefe;text-align:center}.orchestration b{display:block;font-size:24px;color:#17324d}.orchestration small{color:#7a8a92;font-size:10px}.command-note{color:#6b7d86;font-size:12px;line-height:1.5;margin-bottom:0}@media(max-width:1000px){.command-grid{grid-template-columns:1fr}}
+/* =========================================================
+   STYLE 4 · PREMIUM CLINICAL COMMAND CENTER + M4
+   ========================================================= */
+.global-search{display:flex;align-items:center;width:390px;height:38px;border:1px solid #dce7eb;border-radius:12px;background:#f9fcfd;padding:0 5px 0 11px;box-sizing:border-box}.global-search span{color:#8aa0aa;font-size:17px}.global-search input{border:0;outline:0;background:transparent;flex:1;padding:0 9px;font:inherit;font-size:12px;color:#17324d}.search-btn{background:#0c9f8a;color:#fff;border:0;border-radius:9px;padding:8px 12px;font-size:11px}.icon-btn{position:relative;width:38px;height:38px;padding:0;border-radius:11px;background:#fff}.alert-badge{position:absolute;right:-4px;top:-5px;background:#dc5a5a;color:#fff;border-radius:999px;padding:2px 6px;font-size:9px}.care-metric{border-left:3px solid #0c9f8a}.care-hero{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:28px 30px;border:1px solid #dcebea;border-radius:22px;background:linear-gradient(135deg,#effbf8,#f8fbff);margin-bottom:18px}.care-hero h2{margin:8px 0;font-size:30px;color:#17324d}.care-hero p{margin:0;max-width:780px;color:#667983;line-height:1.55}.care-hero-stat{min-width:150px;text-align:center;background:#fff;border:1px solid #dcebe8;border-radius:18px;padding:17px}.care-hero-stat b{display:block;font-size:31px;color:#087e6c}.care-hero-stat span{font-size:11px;color:#71828a}.care-toolbar{display:flex;justify-content:space-between;align-items:end;gap:18px;margin-bottom:18px}.care-toolbar label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#526975}.care-toolbar select{min-width:320px;padding:11px 12px;border:1px solid #d9e5eb;border-radius:10px;background:#fff;color:#17324d}.care-actions{display:flex;gap:8px;flex-wrap:wrap}.care-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.care-card{background:#fff;border:1px solid #e0eaed;border-radius:18px;padding:20px;box-shadow:0 8px 24px rgba(12,50,65,.05)}.care-card-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.priority,.category{display:inline-block;font-size:9px;font-weight:900;border-radius:999px;padding:5px 8px;margin-right:6px}.priority.low{background:#e6f7f1;color:#087e6c}.priority.medium{background:#fff2d9;color:#986500}.priority.high{background:#ffe4e4;color:#b32828}.category{background:#eef4f6;color:#60757f}.care-card h3{font-size:18px;margin:15px 0 8px}.care-goal{color:#657781;min-height:42px;line-height:1.45}.progress-row,.care-meta{display:flex;justify-content:space-between;font-size:11px;color:#6d7e87}.progress-row b,.care-meta b{color:#17324d}.progress-track{height:8px;background:#e8f0f1;border-radius:999px;overflow:hidden;margin:7px 0 12px}.progress-track span{display:block;height:100%;background:#0c9f8a;border-radius:999px}.care-meta{padding:10px 0;border-top:1px solid #edf2f3;border-bottom:1px solid #edf2f3}.care-actions-list{display:flex;gap:7px;margin-top:12px}.care-actions-list button{font-size:11px}.danger-btn{color:#b32828}.action-list{margin-top:14px;font-size:11px;color:#5f727c}.action-list ol{margin:8px 0 0;padding-left:19px}.action-list li{margin:5px 0;line-height:1.35}.care-empty{text-align:center;padding:45px 25px}.empty-icon{margin:auto;width:46px;height:46px;border-radius:14px;background:#eaf8f5;color:#0c9f8a;display:grid;place-items:center;font-size:22px}.care-empty h3{margin:13px 0 5px}.care-empty p{color:#71818a;max-width:650px;margin:0 auto;line-height:1.5}.care-modal{width:min(760px,92vw);max-height:90vh;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 24px 70px rgba(8,35,54,.25);padding:24px}.care-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.care-form-grid label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#536b78}.care-form-grid input,.care-form-grid select,.care-form-grid textarea{box-sizing:border-box;width:100%;padding:11px 12px;border:1px solid #d9e5eb;border-radius:9px;background:#fff;color:#17324d;font:inherit;font-weight:500;outline:none}.care-form-grid textarea{resize:vertical}.care-form-grid .full-field{grid-column:1/-1}.care-form-grid input:focus,.care-form-grid select:focus,.care-form-grid textarea:focus{border-color:#0c9f8a;box-shadow:0 0 0 3px #e2f6f2}
+@media(max-width:1250px){.global-search{width:300px}.cards{grid-template-columns:repeat(3,1fr)}.care-grid{grid-template-columns:1fr}}
+@media(max-width:1000px){.header-actions{gap:7px}.global-search{width:240px}.care-toolbar{align-items:stretch;flex-direction:column}.care-toolbar select{width:100%}}
+@media(max-width:700px){header{padding:12px 16px;height:auto;align-items:flex-start}.header-actions{flex-wrap:wrap;justify-content:flex-end}.global-search{order:3;width:100%}.content{padding:18px}.care-hero{flex-direction:column;align-items:flex-start}.care-form-grid{grid-template-columns:1fr}.care-form-grid .full-field{grid-column:auto}}
 
 
 /* =====================================================
-   HUMAN-FRIENDLY UI PASS
-   Simple hospital-portal look: clear labels, less visual noise,
-   and no decorative security/AI claims.
+   STYLE 4 · PATIENT-360 CLINICAL COMMAND CENTER
    ===================================================== */
-:host{font-family:"Segoe UI",Arial,sans-serif;color:#29404f}
-.app{background:#f4f7f9;color:#29404f}
-aside{width:228px;background:#17384a;padding:18px 12px}
-.logo{padding:6px 9px 22px}.logo>span{width:36px;height:36px;border-radius:9px;background:#1b9b8a}.logo b{font-size:16px}.logo small{font-size:10px;color:#a7bcc6}
-aside button{padding:10px 12px;border-radius:8px;font-size:12px;color:#bdd0d8}
-aside button.active,aside button:hover{background:#225165;color:#fff}
-.clinical-topnav{height:58px;background:#fff;border-bottom:1px solid #dfe7eb;color:#34505f;position:static;padding:0 22px;box-shadow:none}
-.doctor-strip b{color:#29404f}.doctor-strip small{color:#7a8c96}.doctor-avatar{background:#e6f4f2;color:#08796d}
-.milestone-nav button{color:#607581!important;background:#f6f8f9!important;border:1px solid #e1e8eb!important;border-radius:7px!important;padding:7px 10px!important}
-.milestone-nav button.active{color:#0b766b!important;background:#e8f6f3!important;border-color:#bfe5de!important;box-shadow:none}
-.hipaa-badge{color:#15806f;font-size:9px}
-header{height:76px;padding:0 28px;background:#fff!important;border-bottom:1px solid #e1e8eb!important}
-header h1{font-size:21px;color:#29404f!important} header p{color:#7d8e98!important}
-.content{padding:24px 28px}
-.panel{border-radius:10px;box-shadow:none;border-color:#dfe7eb}
-button{box-shadow:none;font-weight:600}
-.dash-hero{background:#eaf5f4;border:1px solid #cfe6e3;border-radius:12px;padding:22px;color:#254b5a;box-shadow:none}
-.dash-hero .eyebrow{color:#147869}.dash-hero h2{font-size:25px;letter-spacing:0;color:#244653}.dash-hero p{color:#58707b;line-height:1.5}.hero-primary{background:#168c7d!important;color:#fff!important;border:1px solid #168c7d!important}.hero-secondary{background:#fff!important;color:#365665!important;border:1px solid #cad9df!important}
-.student-note{margin-top:12px;font-size:11px;color:#4d6d78;background:#fff;border:1px solid #d4e5e3;padding:8px 10px;border-radius:7px;display:inline-block}
-.stat-card{border-radius:10px;box-shadow:none}.stat-card:hover{transform:none;box-shadow:none}
-.dashboard-note{box-shadow:none}
-.m4-page{background:#f4f7f9}
-.m4-hero{background:#edf7f5;color:#284b57;border:1px solid #d0e5e1;border-radius:11px;padding:21px 23px;box-shadow:none}
-.m4-hero h2{font-size:23px;color:#234653}.m4-hero p{color:#5e757d}
-.m4-hero-badge{background:#fff;border-color:#d5e5e3;color:#31515d}.m4-hero-badge span{color:#738a92}.m4-hero-badge b{color:#31515d}
-.m4-selector{background:#fff!important;border:1px solid #dfe7eb!important;color:#29404f}.m4-selector-actions select{background:#fff;color:#34505f;border:1px solid #cddbe0}
-.m4-progress-track{height:8px;background:#e8eef0;border-radius:8px}.m4-progress-track span{background:#1a9787!important}
-.m4-risk{background:#eef2f4;color:#526a74}.m4-chip{background:#eef7f6;color:#24776e}
-.care-task{border-color:#e0e8eb!important;background:#fbfcfc!important}.care-task:hover{background:#f6faf9!important}
-/* Keep the AI and monitoring pages readable but less glossy. */
-.screenshot-ai-page,.screenshot-alerts-page{background:#0b1722}
-.ai-kpi,.cvd-card,.risk-mini-card,.fl-strip,.dark-history,.alert-summary-grid>div,.dark-alert-table{box-shadow:none}
-.ai-kpi-grid,.alert-summary-grid{gap:9px}
-@media(max-width:900px){aside{width:200px}.clinical-topnav{padding:8px 12px}}
-
-/* =====================================================
-   MEDISPHERE CARE DESK · FINAL HIGH-CONTRAST UI
-   Clear clinic portal look. No low-contrast text, no dark text
-   on dark cards, and no decorative gradients.
-   ===================================================== */
-:host{display:block;--navy:#163b53;--navy2:#214f69;--teal:#147d70;--teal2:#e8f6f2;--blue:#2563a8;--ink:#173246;--muted:#657a88;--line:#d7e1e7;--bg:#eef3f7;--card:#fff;--danger:#b42318;--danger-bg:#fff0ee;--amber:#9a5a00;--amber-bg:#fff6df}
-*{box-sizing:border-box}.app{min-height:100vh;background:var(--bg)!important;color:var(--ink)!important}.app main{min-width:0;background:var(--bg)!important}
-aside{width:238px!important;background:var(--navy)!important;color:#fff!important;padding:18px 14px!important;border-right:1px solid #0f3043!important;box-shadow:none!important}
-.logo{padding:6px 8px 18px!important;margin-bottom:14px!important;border-bottom:1px solid rgba(255,255,255,.14)!important}.logo>span{width:36px!important;height:36px!important;border-radius:9px!important;background:#1f9a89!important;color:#fff!important;display:grid!important;place-items:center!important;font-size:22px!important}.logo b{color:#fff!important;font-size:16px!important}.logo small{color:#b8cbd5!important;font-size:9px!important;margin-top:4px!important}
-aside>button{display:flex!important;align-items:center!important;gap:10px!important;width:100%!important;padding:10px 11px!important;margin:2px 0!important;border:1px solid transparent!important;border-radius:7px!important;background:transparent!important;color:#d6e4eb!important;font-size:12px!important;text-align:left!important;cursor:pointer!important}.side-bottom>button{display:flex!important;align-items:center!important;gap:10px!important;width:100%!important;padding:10px 11px!important;margin:8px 0 0!important;border:1px solid transparent!important;border-radius:7px!important;background:transparent!important;color:#d6e4eb!important;font-size:12px!important;text-align:left!important;cursor:pointer!important}aside>button:hover,.side-bottom>button:hover{background:#204d67!important;color:#fff!important}aside>button.active{background:#2a627f!important;color:#fff!important;border-color:#3a7894!important;box-shadow:none!important}.side-bottom{margin-top:auto!important;padding-top:14px!important;border-top:1px solid rgba(255,255,255,.14)!important}.user-mini{padding:0 10px;color:#fff!important;font-size:11px;font-weight:800}.user-mini small{display:block;color:#b8cad4!important;font-size:9px;margin-top:4px;font-weight:500}
-.clinical-topnav{height:64px!important;background:#fff!important;border-bottom:1px solid var(--line)!important;padding:0 24px!important;display:flex!important;align-items:center!important;gap:18px!important;position:sticky!important;top:0!important;z-index:20!important;box-shadow:none!important}.doctor-strip{display:flex!important;align-items:center!important;gap:10px!important;min-width:215px!important}.doctor-avatar{width:34px!important;height:34px!important;border-radius:50%!important;background:#dcefeb!important;color:#0f796d!important;display:grid!important;place-items:center!important;font-size:10px!important;font-weight:900!important}.doctor-strip b{display:block!important;color:var(--ink)!important;font-size:11px!important}.doctor-strip small{display:block!important;color:#758894!important;font-size:9px!important;margin-top:3px!important}.milestone-nav{display:flex!important;gap:7px!important;flex:1!important;overflow:auto!important}.milestone-nav button{white-space:nowrap!important;background:#f7f9fb!important;color:#617683!important;border:1px solid var(--line)!important;padding:7px 10px!important;border-radius:7px!important;font-size:10px!important;font-weight:800!important}.milestone-nav button.active{background:var(--teal2)!important;color:#0f776b!important;border-color:#acd7ce!important;box-shadow:none!important}.hipaa-badge{white-space:nowrap!important;font-size:9px!important;color:#177866!important;font-weight:800!important}
-header{min-height:76px!important;background:#fff!important;border-bottom:1px solid var(--line)!important;padding:0 24px!important;color:var(--ink)!important}header h1{color:var(--ink)!important;font-size:20px!important;font-weight:800!important;letter-spacing:-.01em!important}header p{color:#728691!important;font-size:11px!important}.header-actions{gap:8px!important}.header-actions .live{background:#edf8f4!important;color:#187866!important;border:1px solid #c8e5db!important;border-radius:18px!important;padding:7px 10px!important;font-size:9px!important;font-weight:800!important}.header-actions button{background:#fff!important;color:#47606e!important;border:1px solid #ccd9e0!important;border-radius:7px!important;padding:8px 10px!important;font-size:10px!important;font-weight:800!important}
-.content{padding:22px 24px 30px!important;color:var(--ink)!important}.panel,.table{background:var(--card)!important;border:1px solid var(--line)!important;border-radius:10px!important;box-shadow:0 2px 8px rgba(24,55,73,.04)!important;color:var(--ink)!important}.panel h3,.panel h4,.section-heading h3,.panel b{color:var(--ink)!important}.muted,.panel small,.section-heading p{color:var(--muted)!important}
-.toolbar input,input,select,textarea{border-color:#cbd8df!important;background:#fff!important;color:var(--ink)!important}.toolbar input:focus,input:focus,select:focus,textarea:focus{outline:none!important;border-color:#298f82!important;box-shadow:0 0 0 3px rgba(41,143,130,.10)!important}button.primary,.primary{background:var(--teal)!important;border-color:var(--teal)!important;color:#fff!important;border-radius:7px!important;font-weight:800!important}.primary:hover{background:#0f6d61!important}
-/* Dashboard */
-.dash-hero{background:#fff!important;border:1px solid var(--line)!important;border-radius:11px!important;box-shadow:none!important;padding:22px 22px!important}.dash-hero:before{background:#198b7d!important;width:5px!important}.dash-hero .eyebrow,.section-kicker{color:#147d70!important}.dash-hero h2{color:var(--ink)!important;font-size:24px!important}.dash-hero p{color:var(--muted)!important}.student-note{background:#f5f9fb!important;border:1px solid #dbe6eb!important;color:#607582!important}.hero-primary{background:#167d70!important;color:#fff!important;border:1px solid #167d70!important}.hero-secondary{background:#fff!important;color:#355565!important;border:1px solid #cbd9df!important}.dash-date-card{background:#f8fafb!important;border:1px solid var(--line)!important;box-shadow:none!important}.dash-date-card strong,.dash-date-card b{color:#23475d!important}.dash-date-card small{color:#748791!important}.stat-grid{gap:12px!important}.stat-card{background:#fff!important;border:1px solid var(--line)!important;border-radius:10px!important;box-shadow:none!important}.stat-card:hover{transform:none!important;box-shadow:none!important}.stat-card small{color:#667b88!important}.stat-card strong{color:#173246!important}.stat-card>span{color:#738691!important}.stat-icon{background:#eaf5f2!important;color:#127a6d!important}.stat-link{color:#2d6475!important}.patient-roster-row,.appointment-modern{border-color:#e6edf1!important}.patient-avatar{background:#e5f3f0!important;color:#167b6e!important}.patient-roster-info b,.appointment-person b,.appointment-time b{color:#1c4054!important}.patient-roster-info span,.appointment-person span,.appointment-time span{color:#788b96!important}.record-chip,.appointment-status{background:#eef6f4!important;color:#347568!important;border:1px solid #d3e6e0!important}.signal-card{background:#fbfcfd!important;border:1px solid #dce6eb!important}.signal-red{border-left:4px solid #d05d52!important}.signal-teal{border-left:4px solid #2d9b89!important}.signal-blue{border-left:4px solid #4f82b0!important}.signal-card b{color:#244354!important}.signal-card small{color:#738691!important}.signal-icon{background:#edf4f6!important;color:#326178!important}.quick-action-grid button{background:#fbfcfd!important;border:1px solid #dbe5ea!important;color:#2b4a5b!important;border-radius:8px!important}.quick-action-grid button span{background:#e8f5f2!important;color:#137c70!important}.dashboard-note{background:#fff!important;border:1px solid var(--line)!important;box-shadow:none!important}.dashboard-note b{color:#244354!important}.dashboard-note small{color:#778a94!important}.dashboard-note em{background:#eef7f4!important;color:#50766f!important}
-/* M4 */
-.m4-page{background:var(--bg)!important}.m4-hero{background:#fff!important;border:1px solid var(--line)!important;color:var(--ink)!important;box-shadow:none!important}.m4-hero h2{color:var(--ink)!important}.m4-hero p{color:var(--muted)!important}.m4-hero:before{background:#198b7d!important}.m4-hero-badge,.m4-selector{background:#fff!important;border:1px solid var(--line)!important;color:var(--ink)!important;box-shadow:none!important}.m4-selector h3,.m4-card-head h3{color:var(--ink)!important}.m4-selector-actions select{background:#fff!important;color:var(--ink)!important;border:1px solid #cbd8df!important}.m4-message{background:#edf8f4!important;border:1px solid #c6e4d9!important;color:#146c5d!important}.m4-chip,.m4-risk{background:#edf6f4!important;color:#2d7469!important;border:1px solid #d0e4de!important}.m4-risk-high{background:var(--danger-bg)!important;color:var(--danger)!important;border-color:#efc9c3!important}.m4-profile-grid>div,.health-reading-grid>div{background:#f8fafb!important;border:1px solid #dfe7eb!important}.m4-profile-grid small,.health-reading-grid small{color:#718692!important}.m4-profile-grid b,.health-reading-grid b{color:var(--ink)!important}.m4-progress-number strong{color:#137b6e!important}.m4-progress-number span{color:#748792!important}.m4-progress-track{background:#e7eef1!important;border:1px solid #d6e1e6!important}.m4-progress-track span{background:#198b7d!important}.care-summary{background:#f7fafb!important;border:1px solid #dfe8ec!important}.care-summary b{color:#244455!important}.care-summary p{color:#718590!important}.care-task{background:#fbfcfd!important;border:1px solid #dfe7eb!important;color:var(--ink)!important;border-radius:8px!important}.care-task:hover{background:#f6faf9!important}.care-task-status{background:#eef4f6!important;color:#57717d!important;border:1px solid #d7e3e8!important}.care-task.completed{background:#f0f8f4!important;border-color:#cbe3d8!important}.care-task.completed b{color:#54706e!important}.m4-history-panel .care-history-row{border-color:#e6edf1!important}.care-history-row b{color:#244455!important}.care-history-row small,.care-history-row>span{color:#788c97!important}.m4-page .muted{color:#748792!important}
-/* AI Risk + Alerts */
-.screenshot-ai-page,.screenshot-alerts-page{background:var(--bg)!important;color:var(--ink)!important}.ai-page-head h2,.alert-page-head h2{color:var(--ink)!important}.ai-page-head p,.alert-page-head p{color:var(--muted)!important}.ai-brandline{color:#2d4e61!important}.ai-brandline small{color:#7b8c96!important}.brand-mark{color:#1a897b!important}.ai-head-actions button{background:#fff!important;color:#4c6573!important;border:1px solid #d2dee4!important}.ai-head-actions .blue-action,.run-ai,.dispatch-btn{background:#157f72!important;border-color:#157f72!important;color:#fff!important}.ai-kpi,.cvd-card,.risk-mini-card,.fl-strip,.dark-history,.alert-summary-grid>div,.dark-alert-table,.ai-control-strip{background:#fff!important;border:1px solid var(--line)!important;box-shadow:none!important;color:var(--ink)!important}.ai-kpi span,.ai-kpi small,.risk-mini-card em{color:#6d828e!important}.ai-kpi strong,.risk-mini-card strong{color:var(--ink)!important}.ai-control-strip span{color:#748894!important}.ai-control-strip b{color:var(--ink)!important}.ai-control-strip select{background:#fff!important;color:var(--ink)!important;border:1px solid #cbd8df!important}.monitor-live{background:#eaf7f3!important;border:1px solid #c6e5da!important;color:#107463!important}.alert-summary-grid .severity-high,.alert-summary-grid .critical{background:var(--danger-bg)!important;color:var(--danger)!important}.dark-history,.dark-alert-table{background:#fff!important}.dark-history *,.dark-alert-table *{color:inherit!important}.dark-history table th,.dark-alert-table table th{background:#f5f8fa!important;color:#566e7b!important}.dark-history table td,.dark-alert-table table td{color:#234354!important;border-color:#e5edf1!important}
-/* Other pages */
-.form-modal,.modal-backdrop .form-modal{background:#fff!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:0 18px 50px rgba(20,45,65,.15)!important}.form-modal h3{color:var(--ink)!important}.form-modal .muted{color:var(--muted)!important}.slot-section{border-top-color:#e3ebef!important}.slot-section button{background:#f8fafb!important;border:1px solid #d5e1e6!important;color:#2e4f60!important}.slot-section button.selected-slot{background:#e8f6f2!important;color:#0f766a!important;border-color:#abd8cf!important}.table th{background:#f5f8fa!important;color:#5b727f!important}.table td{color:#234354!important;border-top-color:#e5edf1!important}.table td small{color:#7b8d97!important}.badge,.chip{color:#2d6574!important;background:#eef5f7!important;border-color:#d6e3e8!important}
-@media(max-width:1050px){aside{width:215px!important}.clinical-topnav{padding:0 14px!important}.content{padding:18px!important}}
-@media(max-width:760px){aside{width:72px!important;padding:14px 8px!important}.logo div,.logo small,.user-mini,aside>button span,.side-bottom>button span{display:none!important}.logo{justify-content:center!important}.logo>span{margin:auto!important}.clinical-topnav{gap:10px!important}.doctor-strip{min-width:auto!important}.doctor-strip>div{display:none!important}.hipaa-badge{display:none!important}.content{padding:14px!important}}
+.clinical-app{background:#f4f7f9;color:#18344b;min-height:100vh}.clinical-sidebar{width:258px;background:#09283b;padding:18px 14px 14px;border-right:1px solid #0f3b51}.clinical-logo{padding:8px 10px 24px}.logo-mark{width:42px!important;height:42px!important;border-radius:13px!important;background:#0fb39b!important;box-shadow:0 8px 20px rgba(15,179,155,.22)}.sidebar-label{padding:6px 12px 8px;color:#6f93a3;font-size:9px;font-weight:800;letter-spacing:1.8px}.nav-item{position:relative;display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px!important;margin:3px 0!important;border:1px solid transparent!important;background:transparent!important;color:#a9c0ca!important;border-radius:12px!important;font-size:12px!important}.nav-item:hover{background:#103b51!important;color:#fff!important}.nav-item.active{background:#123f54!important;color:#fff!important;border-color:#1a566a!important;box-shadow:inset 3px 0 #10b29a}.nav-icon{width:18px;text-align:center;color:#83b8c1;font-size:13px}.nav-item.active .nav-icon{color:#56ddc7}.nav-arrow{margin-left:auto;color:#56ddc7;font-size:18px}.sidebar-footer{margin-top:auto;border-top:1px solid #1a4254;padding:15px 4px 2px}.sidebar-user{display:flex;align-items:center;gap:9px;padding:4px 7px 12px}.sidebar-user b{display:block;font-size:11px;color:#e5f2f5}.sidebar-user small{display:block;margin-top:3px;color:#6f929f;font-size:9px}.doctor-avatar-small{width:31px;height:31px;border-radius:10px;background:#d9f5ef;color:#087d6f;display:grid;place-items:center;font-size:10px;font-weight:900}.logout-btn{width:100%!important;background:#0d3044!important;color:#9bb8c3!important;border:1px solid #16465a!important;text-align:center!important}.clinical-main{background:#f4f7f9}.clinical-topbar{min-height:86px;background:#fff;border-bottom:1px solid #e2eaee;display:grid;grid-template-columns:220px 1fr auto;align-items:center;gap:18px;padding:13px 24px}.context-kicker{display:block;color:#8297a3;font-size:8px;font-weight:900;letter-spacing:1.5px}.page-context h1{margin:3px 0 0;font-size:21px;color:#12324a}.milestone-strip{display:flex;justify-content:center;gap:5px}.milestone-strip button{padding:8px 12px;border:1px solid #e0eaed;background:#f8fbfc;border-radius:10px;color:#617986;font-size:10px}.milestone-strip button span{margin-left:4px;font-weight:500}.milestone-strip button.active{background:#e8f8f5;border-color:#bde7df;color:#087b6d}.topbar-actions{display:flex;align-items:center;gap:9px}.clinical-search{display:flex!important;align-items:center;width:260px;height:38px!important;border:1px solid #dce7eb!important;border-radius:11px!important;background:#f9fbfc}.clinical-search input{border:0!important;background:transparent!important;outline:0;width:145px!important;padding:0!important}.search-btn{padding:7px 10px!important;border:0!important;border-radius:8px!important;background:#0eaa91!important;color:#fff!important;font-size:10px!important}.top-icon-btn{position:relative;width:38px;height:38px;padding:0;border-radius:11px;background:#fff;border:1px solid #dce7eb}.alert-badge{position:absolute;right:-4px;top:-6px;background:#e45c59;color:#fff;border-radius:999px;padding:2px 5px;font-size:8px}.system-state{font-size:10px;color:#087b6d;white-space:nowrap}.system-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#14aa91;margin-right:4px}.refresh-btn{height:38px;border-radius:11px!important}.patient-context-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 28px;background:#fbfdfd;border-bottom:1px solid #e5edef}.selected-patient-chip{display:flex;align-items:center;gap:9px}.selected-patient-chip .avatar{width:34px;height:34px;border-radius:10px;font-size:13px}.selected-patient-chip b{font-size:11px;display:block}.selected-patient-chip small{font-size:9px;color:#82939c}.context-actions{display:flex;gap:7px}.context-actions button{font-size:10px;padding:7px 10px}.content{padding:24px 28px!important;max-width:1600px;margin:auto;width:100%}.hero,.section-hero,.clinical-page-hero,.monitor-hero,.care-hero{border-radius:20px!important;border:1px solid #dcebea!important;background:linear-gradient(135deg,#eefaf7,#f8fbfd)!important;color:#17344b!important;box-shadow:0 10px 30px rgba(28,65,80,.05)}.hero{padding:26px 30px!important}.hero h2,.clinical-page-hero h2,.monitor-hero h2,.care-hero h2{color:#14364d!important}.hero p,.clinical-page-hero p,.monitor-hero p,.care-hero p{color:#637883!important}.hero-icon{color:#0aa58d!important;opacity:.16!important}.panel{border:1px solid #e0eaed!important;border-radius:16px!important;box-shadow:0 8px 24px rgba(28,65,80,.045);background:#fff}.metric{border:1px solid #e0eaed!important;border-radius:15px!important;box-shadow:0 7px 18px rgba(28,65,80,.04)}.metric b{color:#15384f}.metric.warn b{color:#c47708}.command-grid{gap:18px}.patient-quick{border:1px solid #e5edef!important;border-radius:12px!important;background:#fbfdfd!important}.patient-quick:hover{background:#f0faf8!important;border-color:#bfe4dc!important}.command-status,.entry-status{font-size:9px;color:#087d6e;background:#e8f8f5;border-radius:999px;padding:5px 8px}.table{border-radius:16px}.table table th{color:#78909b;font-size:9px;letter-spacing:.5px;text-transform:uppercase}.toolbar input,.form-grid input,.form-grid select,.care-toolbar select{border:1px solid #dce7eb!important;border-radius:10px!important;background:#fbfdfd}.primary{background:#0ca88f!important;border-radius:10px!important}.danger-btn{border-radius:9px!important}.section-hero{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:24px 26px;margin-bottom:18px}.hero-stat{min-width:190px;padding:15px 18px;border-radius:14px;background:#fff;border:1px solid #dcebea}.hero-stat span{display:block;font-size:9px;color:#7c909a;text-transform:uppercase;letter-spacing:1px}.hero-stat b{display:block;margin-top:5px;font-size:15px}.vitals-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.65fr);gap:18px}.vital-entry-card{padding:22px}.card-kicker{display:block;color:#0a9581;font-size:8px;font-weight:900;letter-spacing:1.5px;margin-bottom:4px}.vital-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:18px}.field{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:800;color:#315166}.field span{font-weight:600;color:#80939e}.field input,.field select{width:100%;height:42px;padding:0 12px;border:1px solid #dce7eb;border-radius:10px;background:#fbfdfd;outline:0;color:#18364c}.field input:focus,.field select:focus{border-color:#77cfc0;box-shadow:0 0 0 3px #e7f8f4}.field small{font-size:9px;color:#8a9ba4;font-weight:500}.field-wide{grid-column:1/-1}.vital-form-footer{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-top:18px;padding-top:16px;border-top:1px solid #e9eff1}.demo-note{display:flex;flex-direction:column;gap:3px;max-width:55%;font-size:9px;color:#7a8d97}.demo-note b{font-size:10px;color:#38586b}.form-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.demo-critical-btn{border-color:#efc9c6!important;color:#ad3b32!important;background:#fff7f6!important}.vital-guide-card{padding:22px}.vital-guide-card h3{margin:3px 0 20px}.vital-flow-step{display:flex;gap:11px;padding:13px 0;border-bottom:1px solid #edf2f3}.vital-flow-step>span{width:26px;height:26px;border-radius:8px;background:#e9f8f5;color:#0b8d79;display:grid;place-items:center;font-size:9px;font-weight:900}.vital-flow-step b{display:block;font-size:11px}.vital-flow-step small{display:block;color:#7f929c;font-size:9px;margin-top:3px}.guide-link{margin-top:16px;width:100%;background:#f0faf8!important;color:#087b6d!important;border-color:#ccebe5!important}.recent-vitals-card{margin-top:18px}.recent-vital-row{display:grid;grid-template-columns:1.2fr repeat(5,1fr);gap:10px;padding:11px 0;border-bottom:1px solid #edf1f3;font-size:10px;color:#5e7480}.recent-vital-row b{color:#17384e}.monitor-grid{gap:18px}.monitor-hero{padding:24px 26px!important}.vital-grid{grid-template-columns:repeat(5,1fr)!important}.live-vital{min-height:125px}.trend-tabs button.active{background:#e8f8f5!important;color:#087d6e!important;border-color:#bde7df!important}.care-hero{padding:24px 26px!important}.care-toolbar{border-radius:15px!important}.care-card{border-radius:16px!important;box-shadow:0 8px 22px rgba(28,65,80,.045)!important}.modal{backdrop-filter:blur(5px)}
+@media(max-width:1200px){.clinical-topbar{grid-template-columns:180px 1fr}.topbar-actions{grid-column:1/-1;justify-content:flex-end}.milestone-strip{justify-content:flex-start}.vitals-layout{grid-template-columns:1fr}.vital-grid{grid-template-columns:repeat(3,1fr)!important}}
+@media(max-width:800px){.clinical-sidebar{width:72px}.clinical-logo>div,.sidebar-label,.nav-item>span:not(.nav-icon):not(.nav-arrow),.sidebar-user>div:not(.doctor-avatar-small),.logout-btn span{display:none}.clinical-topbar{display:block;padding:12px 15px}.milestone-strip{overflow:auto;margin:10px 0}.topbar-actions{justify-content:stretch;flex-wrap:wrap}.clinical-search{width:100%}.patient-context-bar{padding:9px 15px;flex-wrap:wrap}.content{padding:16px!important}.vital-form-grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.vital-form-footer{align-items:flex-start;flex-direction:column}.demo-note{max-width:100%}.recent-vital-row{grid-template-columns:1fr 1fr}.vital-grid{grid-template-columns:repeat(2,1fr)!important}}
+@media(max-width:520px){.clinical-sidebar{width:60px}.milestone-strip button span{display:none}.vital-grid{grid-template-columns:1fr!important}.form-actions{width:100%}.form-actions button{flex:1}.context-actions{width:100%;overflow:auto}.system-state{display:none}}
 
 
-/* Light clinical shell used by the dashboard reference */
-.app{background:#f4f7fa!important}
-aside{width:230px!important;background:#ffffff!important;color:#385363!important;border-right:1px solid #dde6eb!important;padding:20px 12px!important}
-.logo{padding:7px 10px 24px!important}.logo>span{background:#e7f0ff!important;color:#2267c9!important;border:1px solid #cfe0fb!important;font-size:18px!important}.logo b{color:#19364a!important}.logo small{color:#8a9aa3!important}
-aside button{color:#647985!important;padding:10px 11px!important;border-radius:7px!important;font-size:11px!important}
-aside button.active,aside button:hover{background:#eaf2ff!important;color:#2064bd!important}
-.side-bottom{border-top:1px solid #e4ebef!important}.user-mini{color:#29485a!important}.user-mini small{color:#83939c!important}.side-bottom>button{background:#fff!important;color:#6a7f8b!important;border:1px solid #dbe5ea!important;margin-top:5px}
-main{background:#f4f7fa!important}
-main:has(.dashboard-page) > header{display:none!important}
-.clinical-topnav{background:#fff!important;border-bottom:1px solid #dce5ea!important;box-shadow:0 1px 4px rgba(16,47,66,.025)!important}
-.doctor-avatar{background:#e8f2ff!important;color:#2c6dc7!important}.milestone-nav button{background:#f6f9fb!important;color:#6b7f8a!important;border-color:#e0e8ed!important}.milestone-nav button.active{background:#eaf4ff!important;color:#2267c9!important;border-color:#cddff7!important}.hipaa-badge{color:#177b6c!important}
+
+
+/* ============================================================
+   MEDISPHERE — STYLE 4 EXACT DIRECTION
+   Patient 360 Focused / Clean Clinical Workspace
+   UI ONLY: existing Angular/API logic remains unchanged.
+   ============================================================ */
+
+:host{
+  --s4-bg:#f5f8fa;
+  --s4-card:#ffffff;
+  --s4-border:#e3eaee;
+  --s4-text:#173b52;
+  --s4-muted:#7b8e99;
+  --s4-teal:#0db09a;
+  --s4-teal-dark:#078b79;
+  --s4-teal-soft:#e7f8f4;
+  --s4-blue:#2475d8;
+  --s4-red:#e45858;
+  --s4-amber:#d99a26;
+  font-family:Inter,"Segoe UI",Arial,sans-serif !important;
+  color:var(--s4-text) !important;
+  background:var(--s4-bg) !important;
+}
+
+/* ---------- APPLICATION SHELL ---------- */
+
+.app,
+.clinical-app{
+  min-height:100vh !important;
+  display:flex !important;
+  background:var(--s4-bg) !important;
+}
+
+/* ---------- LEFT SIDEBAR: STYLE 4 IS LIGHT ---------- */
+
+.clinical-sidebar,
+aside{
+  width:224px !important;
+  min-width:224px !important;
+  background:#fff !important;
+  color:#496272 !important;
+  border-right:1px solid #e2e9ed !important;
+  padding:18px 12px !important;
+  box-sizing:border-box !important;
+  box-shadow:2px 0 12px rgba(22,52,69,.025) !important;
+}
+
+.clinical-logo,
+.logo{
+  padding:6px 9px 23px !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:10px !important;
+}
+
+.logo-mark,
+.logo>span{
+  width:36px !important;
+  height:36px !important;
+  border-radius:11px !important;
+  background:linear-gradient(135deg,#11b6a0,#087d9a) !important;
+  color:#fff !important;
+  display:grid !important;
+  place-items:center !important;
+  font-size:18px !important;
+  box-shadow:none !important;
+}
+
+.logo b{
+  display:block !important;
+  color:#173b52 !important;
+  font-size:15px !important;
+  font-weight:800 !important;
+}
+
+.logo small{
+  display:block !important;
+  margin-top:2px !important;
+  color:#91a0a8 !important;
+  font-size:8px !important;
+}
+
+.sidebar-label{
+  margin:4px 10px 7px !important;
+  color:#a2afb6 !important;
+  font-size:8px !important;
+  font-weight:800 !important;
+  letter-spacing:1.3px !important;
+}
+
+.clinical-sidebar .nav-item,
+aside button{
+  width:100% !important;
+  min-height:35px !important;
+  padding:8px 10px !important;
+  margin:2px 0 !important;
+  border:1px solid transparent !important;
+  border-radius:9px !important;
+  background:transparent !important;
+  color:#637883 !important;
+  font-size:10px !important;
+  font-weight:600 !important;
+  text-align:left !important;
+  box-shadow:none !important;
+}
+
+.clinical-sidebar .nav-item:hover,
+aside button:hover{
+  background:#f1f8f7 !important;
+  color:#147d70 !important;
+  transform:none !important;
+}
+
+.clinical-sidebar .nav-item.active,
+aside button.active{
+  background:#e7f7f4 !important;
+  color:#087f71 !important;
+  border-color:#c8ebe5 !important;
+  font-weight:800 !important;
+  box-shadow:none !important;
+}
+
+.nav-icon{
+  display:inline-flex !important;
+  width:20px !important;
+  color:#71858f !important;
+}
+
+.nav-item.active .nav-icon{
+  color:#0ca28e !important;
+}
+
+.nav-arrow{
+  float:right !important;
+  color:#10a38f !important;
+}
+
+.sidebar-footer{
+  margin-top:auto !important;
+  padding-top:12px !important;
+  border-top:1px solid #e8edef !important;
+}
+
+.sidebar-user{
+  padding:7px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:8px !important;
+}
+
+.doctor-avatar-small{
+  width:30px !important;
+  height:30px !important;
+  border-radius:50% !important;
+  background:#e8f4f2 !important;
+  color:#078474 !important;
+  display:grid !important;
+  place-items:center !important;
+  font-size:11px !important;
+  font-weight:800 !important;
+}
+
+.sidebar-user b{
+  display:block !important;
+  color:#29495a !important;
+  font-size:10px !important;
+}
+
+.sidebar-user small{
+  display:block !important;
+  color:#9aa8af !important;
+  font-size:8px !important;
+  margin-top:2px !important;
+}
+
+.logout-btn{
+  color:#84959e !important;
+  font-size:9px !important;
+}
+
+/* ---------- MAIN / TOP BAR ---------- */
+
+.clinical-main,
+main{
+  flex:1 !important;
+  min-width:0 !important;
+  background:var(--s4-bg) !important;
+}
+
+.clinical-topbar{
+  min-height:72px !important;
+  padding:12px 22px !important;
+  background:#fff !important;
+  border-bottom:1px solid #e4eaed !important;
+  display:grid !important;
+  grid-template-columns:1fr auto 1fr !important;
+  align-items:center !important;
+  gap:18px !important;
+  box-sizing:border-box !important;
+}
+
+.page-context .context-kicker{
+  display:block !important;
+  color:#99a7ad !important;
+  font-size:8px !important;
+  font-weight:800 !important;
+  letter-spacing:.9px !important;
+  margin-bottom:3px !important;
+}
+
+.page-context h1{
+  margin:0 !important;
+  color:#173b52 !important;
+  font-size:19px !important;
+  font-weight:800 !important;
+}
+
+.milestone-strip{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:4px !important;
+}
+
+.milestone-strip button{
+  border:0 !important;
+  border-radius:8px !important;
+  background:transparent !important;
+  color:#7d8e97 !important;
+  padding:7px 9px !important;
+  font-size:9px !important;
+  font-weight:700 !important;
+}
+
+.milestone-strip button span{
+  color:#a0adb3 !important;
+  font-weight:500 !important;
+}
+
+.milestone-strip button.active{
+  background:#e8f8f4 !important;
+  color:#087f71 !important;
+}
+
+.milestone-strip button.active span{
+  color:#159787 !important;
+}
+
+.topbar-actions{
+  display:flex !important;
+  justify-content:flex-end !important;
+  align-items:center !important;
+  gap:7px !important;
+}
+
+.global-search.clinical-search{
+  width:240px !important;
+  height:35px !important;
+  background:#f7fafb !important;
+  border:1px solid #dfe8eb !important;
+  border-radius:9px !important;
+  padding:0 4px 0 10px !important;
+  box-sizing:border-box !important;
+}
+
+.clinical-search input{
+  border:0 !important;
+  outline:0 !important;
+  background:transparent !important;
+  color:#28495a !important;
+  font-size:9px !important;
+}
+
+.search-btn{
+  border:0 !important;
+  border-radius:7px !important;
+  background:#0ca993 !important;
+  color:#fff !important;
+  padding:7px 10px !important;
+  font-size:9px !important;
+}
+
+.top-icon-btn,
+.refresh-btn{
+  min-height:34px !important;
+  border:1px solid #dfe7ea !important;
+  background:#fff !important;
+  color:#536d7b !important;
+  border-radius:8px !important;
+  font-size:9px !important;
+}
+
+.alert-badge{
+  background:#e85b5b !important;
+  color:#fff !important;
+  border-radius:999px !important;
+  padding:2px 5px !important;
+  font-size:7px !important;
+}
+
+.system-state{
+  color:#657d88 !important;
+  font-size:9px !important;
+  white-space:nowrap !important;
+}
+
+.system-state i{
+  display:inline-block !important;
+  width:6px !important;
+  height:6px !important;
+  border-radius:50% !important;
+  background:#15b39d !important;
+  margin-right:4px !important;
+}
+
+/* ---------- PATIENT CONTEXT ---------- */
+
+.patient-context-bar{
+  min-height:55px !important;
+  padding:8px 24px !important;
+  background:#fff !important;
+  border-bottom:1px solid #e5ecef !important;
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+}
+
+.selected-patient-chip{
+  display:flex !important;
+  align-items:center !important;
+  gap:9px !important;
+}
+
+.selected-patient-chip .avatar{
+  width:34px !important;
+  height:34px !important;
+  border-radius:50% !important;
+  display:grid !important;
+  place-items:center !important;
+  background:#e5f5f3 !important;
+  color:#087e70 !important;
+  font-size:11px !important;
+  font-weight:800 !important;
+}
+
+.selected-patient-chip b{
+  display:block !important;
+  color:#27495b !important;
+  font-size:10px !important;
+}
+
+.selected-patient-chip small{
+  display:block !important;
+  margin-top:2px !important;
+  color:#8d9ba2 !important;
+  font-size:8px !important;
+}
+
+.context-actions{
+  display:flex !important;
+  gap:5px !important;
+}
+
+.context-actions button{
+  border:1px solid #dce7ea !important;
+  background:#fff !important;
+  color:#607682 !important;
+  border-radius:7px !important;
+  padding:7px 9px !important;
+  font-size:8px !important;
+}
+
+.context-actions button:hover{
+  color:#087f71 !important;
+  border-color:#a8ddd4 !important;
+  background:#f4fbfa !important;
+}
+
+/* ---------- CONTENT ---------- */
+
+.content{
+  padding:20px 24px 28px !important;
+  max-width:1500px !important;
+  margin:0 auto !important;
+}
+
+/* ---------- HERO / PATIENT 360 ---------- */
+
+.hero,
+.section-hero,
+.care-hero,
+.monitor-hero,
+.appointment-hero{
+  background:#fff !important;
+  border:1px solid var(--s4-border) !important;
+  border-radius:15px !important;
+  box-shadow:0 5px 18px rgba(27,62,78,.035) !important;
+  color:var(--s4-text) !important;
+}
+
+.hero{
+  padding:22px 24px !important;
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+  background:linear-gradient(120deg,#ffffff 0%,#f1faf8 100%) !important;
+}
+
+.hero h2,
+.section-hero h2,
+.care-hero h2,
+.monitor-hero h2,
+.appointment-hero h2{
+  color:#173b52 !important;
+  font-size:23px !important;
+  font-weight:800 !important;
+  margin:5px 0 7px !important;
+}
+
+.hero p,
+.section-hero p,
+.care-hero p,
+.monitor-hero p,
+.appointment-hero p{
+  color:#7a8c95 !important;
+  font-size:10px !important;
+  line-height:1.55 !important;
+}
+
+.eyebrow{
+  color:#0c9d89 !important;
+  font-size:8px !important;
+  font-weight:900 !important;
+  letter-spacing:1.2px !important;
+}
+
+.hero-icon{
+  width:68px !important;
+  height:68px !important;
+  display:grid !important;
+  place-items:center !important;
+  border-radius:18px !important;
+  background:#e5f7f3 !important;
+  color:#0ba38f !important;
+}
+
+/* ---------- METRICS ---------- */
+
+.cards{
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  gap:11px !important;
+  margin:14px 0 !important;
+}
+
+.metric{
+  background:#fff !important;
+  border:1px solid #e1e9ec !important;
+  border-radius:13px !important;
+  padding:15px 16px !important;
+  box-shadow:0 4px 14px rgba(27,62,78,.03) !important;
+}
+
+.metric:hover{
+  border-color:#c8e5df !important;
+  transform:translateY(-1px) !important;
+}
+
+.metric span{
+  display:block !important;
+  color:#7d9099 !important;
+  font-size:8px !important;
+  font-weight:800 !important;
+  text-transform:uppercase !important;
+  letter-spacing:.55px !important;
+}
+
+.metric b{
+  display:block !important;
+  margin-top:5px !important;
+  color:#173b52 !important;
+  font-size:22px !important;
+  font-weight:800 !important;
+}
+
+.metric small{
+  display:block !important;
+  margin-top:3px !important;
+  color:#9aa7ad !important;
+  font-size:8px !important;
+}
+
+.metric.warn{
+  border-top:2px solid #e7b34d !important;
+}
+
+.metric.danger{
+  border-top:2px solid #e35d5d !important;
+}
+
+.metric.care-metric{
+  border-top:2px solid #876be2 !important;
+}
+
+/* ---------- PANELS ---------- */
+
+.panel{
+  background:#fff !important;
+  border:1px solid #e0e9ec !important;
+  border-radius:14px !important;
+  box-shadow:0 4px 15px rgba(27,62,78,.028) !important;
+  color:#284a5b !important;
+}
+
+.panel h3{
+  color:#1c4054 !important;
+  font-size:13px !important;
+  font-weight:800 !important;
+}
+
+.panel h4{
+  color:#35596b !important;
+  font-size:10px !important;
+}
+
+.panel p{
+  color:#81919a !important;
+  font-size:9px !important;
+}
+
+.panel-head{
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+  gap:10px !important;
+}
+
+.panel-head button{
+  border:1px solid #dce7ea !important;
+  background:#fff !important;
+  color:#617986 !important;
+  border-radius:7px !important;
+  padding:6px 9px !important;
+  font-size:8px !important;
+}
+
+.panel-head button.primary,
+.primary{
+  background:#0ca992 !important;
+  color:#fff !important;
+  border-color:#0ca992 !important;
+}
+
+/* ---------- PATIENT 360 PROFILE ---------- */
+
+.profile{
+  background:#fff !important;
+  border:1px solid #e0e9ec !important;
+  border-radius:15px !important;
+  padding:16px 18px !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:12px !important;
+  box-shadow:0 5px 18px rgba(27,62,78,.035) !important;
+}
+
+.profile .avatar{
+  width:50px !important;
+  height:50px !important;
+  border-radius:50% !important;
+  display:grid !important;
+  place-items:center !important;
+  background:#e5f5f3 !important;
+  color:#087f71 !important;
+  font-size:17px !important;
+  font-weight:800 !important;
+}
+
+.profile-info h2{
+  margin:0 !important;
+  color:#183d52 !important;
+  font-size:16px !important;
+}
+
+.profile-info p{
+  color:#82929b !important;
+  font-size:9px !important;
+}
+
+.profile .primary{
+  margin-left:auto !important;
+}
+
+/* Patient 360 tabs if present */
+.patient-tabs{
+  display:flex !important;
+  gap:3px !important;
+  padding:8px 0 !important;
+  border-bottom:1px solid #e5ecef !important;
+}
+
+.patient-tabs button{
+  border:0 !important;
+  background:transparent !important;
+  color:#758993 !important;
+  padding:7px 10px !important;
+  border-radius:7px !important;
+  font-size:8px !important;
+}
+
+.patient-tabs button.active{
+  color:#087f71 !important;
+  background:#e9f8f5 !important;
+  font-weight:800 !important;
+}
+
+/* ---------- DIGITAL TWIN ---------- */
+
+.twin-panel{
+  margin-top:12px !important;
+  padding:18px !important;
+}
+
+.twin-header{
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+}
+
+.twin-header h3{
+  margin:0 !important;
+}
+
+.twin-meta{
+  color:#93a0a7 !important;
+  font-size:8px !important;
+}
+
+.twin-badge{
+  background:#edf8f6 !important;
+  color:#0a8f7e !important;
+  border:1px solid #cde9e4 !important;
+  border-radius:999px !important;
+  padding:5px 8px !important;
+  font-size:7px !important;
+  font-weight:800 !important;
+}
+
+.twin-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4,1fr) !important;
+  gap:7px !important;
+  margin-top:13px !important;
+}
+
+.twin-grid>div{
+  background:#f8fbfc !important;
+  border:1px solid #e6edef !important;
+  border-radius:9px !important;
+  padding:10px !important;
+}
+
+.twin-grid b{
+  display:block !important;
+  color:#456474 !important;
+  font-size:8px !important;
+}
+
+.twin-grid span{
+  display:block !important;
+  margin-top:4px !important;
+  color:#82939c !important;
+  font-size:8px !important;
+}
+
+/* ---------- VITAL CARDS ---------- */
+
+.vital-grid{
+  display:grid !important;
+  grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+  gap:9px !important;
+}
+
+.live-vital{
+  position:relative !important;
+  background:#fff !important;
+  border:1px solid #e0e9ec !important;
+  border-radius:12px !important;
+  padding:13px !important;
+}
+
+.live-vital span{
+  display:block !important;
+  color:#80929b !important;
+  font-size:8px !important;
+  font-weight:700 !important;
+}
+
+.live-vital b{
+  display:block !important;
+  margin-top:6px !important;
+  color:#183d52 !important;
+  font-size:20px !important;
+}
+
+.live-vital small{
+  color:#97a5ab !important;
+  font-size:8px !important;
+}
+
+.live-vital em{
+  display:inline-block !important;
+  margin-top:6px !important;
+  padding:3px 6px !important;
+  border-radius:999px !important;
+  font-style:normal !important;
+  font-size:7px !important;
+  font-weight:800 !important;
+}
+
+.live-vital em.normal{
+  background:#e4f7f2 !important;
+  color:#087e6c !important;
+}
+
+.live-vital em.warning{
+  background:#fff3d9 !important;
+  color:#a36a00 !important;
+}
+
+.live-vital em.critical{
+  background:#ffe5e5 !important;
+  color:#b72d2d !important;
+}
+
+/* ---------- VITAL ENTRY: LIGHT STYLE 4 ---------- */
+
+.vitals-layout{
+  display:grid !important;
+  grid-template-columns:minmax(0,1.55fr) minmax(285px,.7fr) !important;
+  gap:14px !important;
+  margin-top:14px !important;
+}
+
+.vital-entry-card{
+  padding:18px !important;
+  border-top:3px solid #0ca993 !important;
+}
+
+.vital-form-grid{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:11px !important;
+  margin-top:14px !important;
+}
+
+.field{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:5px !important;
+  color:#3b5c6c !important;
+  font-size:9px !important;
+  font-weight:800 !important;
+}
+
+.field span{
+  color:#94a1a8 !important;
+  font-weight:600 !important;
+}
+
+.field small{
+  color:#9aa8ae !important;
+  font-size:7px !important;
+  font-weight:500 !important;
+}
+
+.field input,
+.field select,
+.vital-form-grid input,
+.vital-form-grid select{
+  width:100% !important;
+  min-height:38px !important;
+  padding:0 10px !important;
+  box-sizing:border-box !important;
+  border:1px solid #dce6e9 !important;
+  border-radius:8px !important;
+  background:#fbfcfd !important;
+  color:#23475a !important;
+  font-size:10px !important;
+  outline:none !important;
+}
+
+.field input:focus,
+.field select:focus{
+  border-color:#70c9bb !important;
+  box-shadow:0 0 0 3px #eaf8f5 !important;
+}
+
+.field-wide{
+  grid-column:1/-1 !important;
+}
+
+.vital-form-footer{
+  margin-top:15px !important;
+  padding-top:13px !important;
+  border-top:1px solid #e8eef0 !important;
+}
+
+.demo-note{
+  display:flex !important;
+  gap:8px !important;
+  align-items:center !important;
+  margin-bottom:10px !important;
+  padding:9px 10px !important;
+  border-radius:9px !important;
+  background:#f7fafb !important;
+  border:1px solid #e6edef !important;
+}
+
+.demo-note b{
+  color:#556f7d !important;
+  font-size:8px !important;
+  white-space:nowrap !important;
+}
+
+.demo-note span{
+  color:#8b9aa1 !important;
+  font-size:8px !important;
+}
+
+.form-actions{
+  display:flex !important;
+  justify-content:flex-end !important;
+  gap:6px !important;
+}
+
+.form-actions button{
+  min-height:34px !important;
+  padding:7px 11px !important;
+  border-radius:7px !important;
+  border:1px solid #dce6e9 !important;
+  background:#fff !important;
+  color:#627984 !important;
+  font-size:8px !important;
+}
+
+.form-actions .demo-critical-btn{
+  background:#fff6e8 !important;
+  border-color:#efd09a !important;
+  color:#9b6700 !important;
+}
+
+.form-actions .primary{
+  color:#fff !important;
+  background:#0ca993 !important;
+  border-color:#0ca993 !important;
+}
+
+.vital-guide-card{
+  padding:18px !important;
+}
+
+.card-kicker{
+  color:#0b9c88 !important;
+  font-size:8px !important;
+  font-weight:900 !important;
+  letter-spacing:1px !important;
+}
+
+.vital-flow-step{
+  display:flex !important;
+  gap:9px !important;
+  padding:11px 0 !important;
+  border-bottom:1px solid #edf1f3 !important;
+}
+
+.vital-flow-step>span{
+  width:24px !important;
+  height:24px !important;
+  border-radius:7px !important;
+  display:grid !important;
+  place-items:center !important;
+  background:#e8f8f5 !important;
+  color:#0a907e !important;
+  font-size:7px !important;
+  font-weight:900 !important;
+  flex:none !important;
+}
+
+.vital-flow-step b{
+  display:block !important;
+  color:#3c5c6c !important;
+  font-size:9px !important;
+}
+
+.vital-flow-step small{
+  display:block !important;
+  margin-top:2px !important;
+  color:#8c9ba2 !important;
+  font-size:7px !important;
+}
+
+.guide-link{
+  width:100% !important;
+  margin-top:12px !important;
+  padding:8px !important;
+  border:1px solid #bfe4dd !important;
+  border-radius:8px !important;
+  background:#eefaf8 !important;
+  color:#087f71 !important;
+  font-size:8px !important;
+}
+
+/* ---------- TABLES / LISTS ---------- */
+
+.table{
+  overflow:auto !important;
+}
+
+table{
+  width:100% !important;
+  border-collapse:collapse !important;
+}
+
+th{
+  background:#f8fafb !important;
+  color:#8a9aa2 !important;
+  padding:10px !important;
+  font-size:7px !important;
+  text-transform:uppercase !important;
+  letter-spacing:.7px !important;
+  text-align:left !important;
+}
+
+td{
+  padding:10px !important;
+  border-bottom:1px solid #edf1f3 !important;
+  color:#526f7d !important;
+  font-size:9px !important;
+}
+
+tr:hover td{
+  background:#fbfdfd !important;
+}
+
+.row{
+  display:flex !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  padding:9px 0 !important;
+  border-bottom:1px solid #edf1f3 !important;
+  color:#71858f !important;
+  font-size:8px !important;
+}
+
+.row b{
+  color:#35576a !important;
+}
+
+/* ---------- MONITORING ---------- */
+
+.monitor-hero,
+.care-hero,
+.appointment-hero{
+  padding:20px 22px !important;
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+}
+
+.monitor-live{
+  color:#0b9a87 !important;
+  background:#e9f8f5 !important;
+  border:1px solid #ccebe5 !important;
+  border-radius:999px !important;
+  padding:7px 10px !important;
+  font-size:8px !important;
+  font-weight:800 !important;
+}
+
+.pulse-dot{
+  display:inline-block !important;
+  width:6px !important;
+  height:6px !important;
+  border-radius:50% !important;
+  background:#13ae97 !important;
+  margin-right:4px !important;
+}
+
+.monitor-grid,
+.command-grid{
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:14px !important;
+}
+
+.monitor-patient{
+  display:flex !important;
+  align-items:center !important;
+  gap:8px !important;
+  padding:10px !important;
+  border-bottom:1px solid #edf1f3 !important;
+  cursor:pointer !important;
+}
+
+.monitor-patient:hover,
+.monitor-patient.selected-monitor{
+  background:#f2faf8 !important;
+}
+
+.status-dot{
+  width:7px !important;
+  height:7px !important;
+  border-radius:50% !important;
+  background:#13aa94 !important;
+}
+
+.status-dot.critical{
+  background:#e45a5a !important;
+}
+
+.status-dot.warning{
+  background:#dda02d !important;
+}
+
+.monitor-patient-main{
+  flex:1 !important;
+}
+
+.monitor-patient-main b{
+  display:block !important;
+  color:#35576a !important;
+  font-size:9px !important;
+}
+
+.monitor-patient-main small{
+  color:#99a6ac !important;
+  font-size:7px !important;
+}
+
+.status-pill{
+  border-radius:999px !important;
+  padding:4px 7px !important;
+  background:#edf7f5 !important;
+  color:#0a8a78 !important;
+  font-size:7px !important;
+  font-weight:800 !important;
+}
+
+.status-pill.critical{
+  background:#ffe7e7 !important;
+  color:#b52c2c !important;
+}
+
+.status-pill.warning{
+  background:#fff2d9 !important;
+  color:#9b6800 !important;
+}
+
+/* ---------- AI / CARE PLAN ---------- */
+
+.risk{
+  border-left:3px solid #16aa96 !important;
+}
+
+.care-grid{
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:12px !important;
+  margin-top:13px !important;
+}
+
+.care-card{
+  background:#fff !important;
+  border:1px solid #e0e9ec !important;
+  border-radius:13px !important;
+  padding:15px !important;
+  box-shadow:0 4px 14px rgba(27,62,78,.03) !important;
+}
+
+.care-card h3{
+  color:#24485b !important;
+  font-size:12px !important;
+}
+
+.progress-track{
+  height:5px !important;
+  background:#edf2f3 !important;
+  border-radius:99px !important;
+  overflow:hidden !important;
+}
+
+.progress-track span{
+  display:block !important;
+  height:100% !important;
+  background:#13b399 !important;
+  border-radius:99px !important;
+}
+
+/* ---------- FORMS / MODALS ---------- */
+
+input,select,textarea{
+  font-family:inherit !important;
+}
+
+.modal-backdrop{
+  background:rgba(31,54,67,.22) !important;
+  backdrop-filter:blur(3px) !important;
+}
+
+.appointment-modal,
+.care-modal,
+.patient-modal{
+  background:#fff !important;
+  border:1px solid #dfe8eb !important;
+  border-radius:16px !important;
+  box-shadow:0 20px 60px rgba(20,49,64,.18) !important;
+}
+
+.modal-head{
+  border-bottom:1px solid #e8eef0 !important;
+}
+
+.close-btn{
+  background:#f5f8f9 !important;
+  color:#6b808a !important;
+  border:0 !important;
+  border-radius:8px !important;
+}
+
+label{
+  color:#526d7b !important;
+  font-size:9px !important;
+  font-weight:700 !important;
+}
+
+label input,
+label select,
+label textarea,
+.appointment-form-grid input,
+.appointment-form-grid select,
+.care-form-grid input,
+.care-form-grid select,
+.care-form-grid textarea,
+.patient-form-grid input,
+.patient-form-grid select{
+  border:1px solid #dce6e9 !important;
+  background:#fbfcfd !important;
+  color:#26495b !important;
+  border-radius:8px !important;
+  min-height:37px !important;
+}
+
+/* ---------- SMALL SCREEN ---------- */
+
+@media(max-width:1200px){
+  .clinical-topbar{
+    grid-template-columns:1fr !important;
+    gap:7px !important;
+  }
+
+  .milestone-strip{
+    justify-content:flex-start !important;
+    overflow:auto !important;
+  }
+
+  .topbar-actions{
+    justify-content:flex-start !important;
+    flex-wrap:wrap !important;
+  }
+
+  .cards{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  .vital-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  .vitals-layout,
+  .monitor-grid,
+  .command-grid{
+    grid-template-columns:1fr !important;
+  }
+
+  .care-grid{
+    grid-template-columns:1fr 1fr !important;
+  }
+}
+
+@media(max-width:800px){
+  .clinical-sidebar,
+  aside{
+    width:68px !important;
+    min-width:68px !important;
+  }
+
+  .logo div,
+  .sidebar-label,
+  .clinical-sidebar .nav-item span:not(.nav-icon),
+  aside button span:not(.nav-icon),
+  .sidebar-user>div:not(.doctor-avatar-small){
+    display:none !important;
+  }
+
+  .content{
+    padding:14px !important;
+  }
+
+  .cards,
+  .vital-grid,
+  .vital-form-grid,
+  .care-grid{
+    grid-template-columns:1fr !important;
+  }
+
+  .field-wide{
+    grid-column:auto !important;
+  }
+}
+
+
+
+/* M4 CARE PLAN — STYLE 4 */
+.careplans-page .care-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:16px 0}.care-summary-card{background:#fff;border:1px solid #e1ebee;border-radius:15px;padding:17px;box-shadow:0 6px 18px rgba(20,60,80,.04)}.care-summary-card span{display:block;color:#80939d;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}.care-summary-card b{display:block;color:#163c52;font-size:25px;margin:5px 0}.care-summary-card small{color:#93a1a8;font-size:9px}.care-title-row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.care-title-row h3{margin:5px 0 2px}.care-title-row small{color:#8a9aa2;font-size:9px}.review-badge{padding:5px 8px;border-radius:999px;font-size:9px;font-weight:800;white-space:nowrap}.review-ok{background:#e8f7f3;color:#087d6d}.review-soon{background:#fff3da;color:#946100}.review-overdue{background:#ffe5e5;color:#b32727}.review-complete{background:#edf1f3;color:#657781}.review-none{background:#f1f4f5;color:#75868e}.care-goal-box{margin:13px 0;padding:12px;border-radius:11px;background:#f7fbfb;border:1px solid #e5eeee}.care-goal-box span{font-size:8px;color:#0a9985;font-weight:900;letter-spacing:1px}.care-goal-box p{margin:5px 0 0;color:#526c79;font-size:10px;line-height:1.5}.progress-quick{display:flex;gap:5px;margin-top:7px}.progress-quick button,.care-quick-actions button{border:1px solid #dbe7ea;background:#fff;color:#55717e;border-radius:7px;padding:5px 8px;font-size:9px}.care-metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:13px 0}.care-metrics-row div{background:#f8fafb;border:1px solid #e6edef;border-radius:9px;padding:9px}.care-metrics-row span{display:block;color:#8a9aa2;font-size:8px}.care-metrics-row b{display:block;color:#244a5d;font-size:11px;margin-top:3px}.treatment-actions-box{border:1px solid #e0ebed;border-radius:12px;padding:12px;background:#fff}.treatment-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.treatment-head b{display:block;color:#284c5d;font-size:11px}.treatment-head small{display:block;color:#8b9aa2;font-size:8px;margin-top:2px}.treatment-head button{border:0;background:#eaf8f5;color:#087d6d;border-radius:7px;padding:6px 9px;font-size:9px}.treatment-action{display:flex!important;align-items:center!important;gap:9px!important;padding:9px 0!important;border-bottom:1px solid #edf2f3!important;color:#486572!important;font-size:10px!important}.treatment-action:last-child{border-bottom:0!important}.treatment-action input{accent-color:#0da58e!important}.done-action{text-decoration:line-through;color:#91a0a7}.no-actions{color:#909fa6;font-size:9px;padding:10px 0}.care-quick-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.care-quick-actions button:disabled{opacity:.45}.care-quick-actions .complete-plan-btn{border-color:#bde3d9;background:#edf9f6;color:#087d6d}.care-card-footer{display:flex;justify-content:flex-end;gap:7px;border-top:1px solid #edf2f3;margin-top:12px;padding-top:10px}.care-card-footer button{border:0;background:transparent;color:#58727e;font-size:9px}.care-card-footer .danger-btn{color:#b33a3a}.care-patient-select{min-width:270px}.care-patient-select select{min-width:270px}@media(max-width:1000px){.careplans-page .care-summary-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.careplans-page .care-summary-grid{grid-template-columns:1fr}.care-metrics-row{grid-template-columns:1fr}.care-title-row{display:block}.review-badge{display:inline-block;margin-top:6px}}
+
 
 /* =========================================================
-   DASHBOARD REBUILD · High contrast clinical workspace
-   Visual direction: clean hospital portal / modern EHR
+   STYLE 4.5 — VISUAL CLINICAL COMMAND CENTER
    ========================================================= */
-.dashboard-page{max-width:none!important;padding:18px 26px 28px!important;background:#f4f7fa!important;color:#182c3d!important}
-.dashboard-toolbar{height:48px;display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}
-.dashboard-search{height:40px;display:flex;align-items:center;gap:9px;width:min(520px,52vw);background:#fff;border:1px solid #dce5ea;border-radius:9px;padding:0 13px;box-shadow:0 1px 3px rgba(16,47,66,.03)}
-.dashboard-search>span{font-size:20px;color:#58717f;line-height:1}
-.dashboard-search input{width:100%!important;border:0!important;box-shadow:none!important;padding:0!important;font-size:12px!important;color:#203a4d!important;background:transparent!important}
-.dashboard-search input::placeholder{color:#9aaab4}
-.dashboard-toolbar-right{display:flex;align-items:center;gap:8px}
-.toolbar-icon,.today-select,.today-chip{height:36px;box-sizing:border-box;border:1px solid #dbe4e9!important;background:#fff!important;color:#486373!important;border-radius:8px!important;font-size:11px!important;font-weight:800!important}
-.toolbar-icon{width:36px;padding:0!important;position:relative;font-size:16px!important}
-.toolbar-icon i{position:absolute;right:-3px;top:-4px;min-width:14px;height:14px;padding:0 3px;border-radius:8px;background:#df5b50;color:#fff;font-size:8px;font-style:normal;display:grid;place-items:center}
-.today-chip{display:flex;align-items:center;padding:0 11px;font-weight:700!important}
-.today-select{padding:0 12px!important}
-.dashboard-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin:2px 0 18px}
-.dashboard-kicker{font-size:10px;letter-spacing:.13em;font-weight:900;color:#177c70}
-.dashboard-heading h2{margin:4px 0 5px;font-size:28px;line-height:1.15;color:#142d3d;letter-spacing:-.02em}
-.dashboard-heading p{margin:0;max-width:720px;color:#6f808b;font-size:12px;line-height:1.6}
-.workspace-status{margin-top:6px;display:flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid #cae5dd;background:#f2fbf8;border-radius:18px;color:#247466;font-size:10px;font-weight:900;white-space:nowrap}
-.workspace-status span{width:7px;height:7px;border-radius:50%;background:#24a38b}
-.dashboard-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
-.dashboard-stat{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #dde6eb;border-radius:11px;padding:14px 15px;min-height:76px;cursor:pointer;transition:.16s}
-.dashboard-stat:hover{border-color:#c9d8df;transform:translateY(-1px);box-shadow:0 7px 18px rgba(17,47,65,.06)}
-.dashboard-stat-icon{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:18px;font-weight:900;flex:0 0 auto}
-.dashboard-stat small{display:block;font-size:10px;color:#6d808b;margin-bottom:2px;font-weight:700}
-.dashboard-stat strong{display:inline-block;font-size:27px;color:#142f41;line-height:1.05;margin-right:7px}
-.dashboard-stat span{display:block;font-size:9px;color:#8b9aa3;margin-top:4px}
-.dashboard-stat.blue .dashboard-stat-icon{background:#e9f1ff;color:#356cc7}.dashboard-stat.teal .dashboard-stat-icon{background:#e7f7f3;color:#159379}.dashboard-stat.red .dashboard-stat-icon{background:#fff0ee;color:#c64b42}.dashboard-stat.violet .dashboard-stat-icon{background:#f1ecff;color:#7654c4}
-.dashboard-two-col{display:grid;grid-template-columns:1.02fr .98fr;gap:14px;margin-bottom:14px}
-.dash-card{background:#fff;border:1px solid #dde6eb;border-radius:11px;padding:16px;box-shadow:0 2px 9px rgba(19,50,68,.035)}
-.dash-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
-.dash-card-head small{display:block;font-size:9px;letter-spacing:.09em;color:#7f929d;font-weight:900;margin-bottom:3px}
-.dash-card-head h3{margin:0;font-size:15px;color:#18364a}
-.outline-btn{height:30px;padding:0 10px!important;border:1px solid #cbd9e0!important;background:#fff!important;color:#2b607b!important;border-radius:6px!important;font-size:9px!important;font-weight:900!important;white-space:nowrap}
-.outline-btn:hover{background:#f3f8fa!important}
-.patient-banner{display:flex;align-items:center;gap:11px;background:#f8fafb;border:1px solid #e3ebef;border-radius:9px;padding:10px 11px;margin-bottom:12px}
-.patient-banner-avatar{width:40px;height:40px;border-radius:10px;background:#ddecff;color:#2e67b8;display:grid;place-items:center;font-weight:900;font-size:12px;flex:0 0 auto}
-.patient-banner-main{flex:1;min-width:0}.patient-banner-main b{display:block;font-size:12px;color:#18364a}.patient-banner-main span{display:block;font-size:9px;color:#81919b;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.patient-badges{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}.good-badge,.soft-badge{font-size:8px;padding:5px 7px;border-radius:12px;font-weight:800}.good-badge{background:#e8f7f1;border:1px solid #c8e5d9;color:#2a7c6c}.soft-badge{background:#eef4f7;border:1px solid #d8e2e8;color:#607986}
-.vital-card-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-.vital-mini{position:relative;min-height:71px;padding:10px 10px 9px;border:1px solid #e4ebef;border-radius:8px;background:#fff;overflow:hidden}
-.vital-mini:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}.vital-mini.heart:before{background:#e45b62}.vital-mini.pressure:before{background:#39a4b4}.vital-mini.oxygen:before{background:#4d86d5}.vital-mini.glucose:before{background:#e5a339}.vital-mini.temp:before{background:#7d65c7}
-.vital-mini small{display:block;font-size:8px;color:#82939d;font-weight:800}.vital-mini b{display:inline-block;font-size:16px;color:#193649;margin-top:4px}.vital-mini>span{font-size:8px;color:#83939c;margin-left:3px}.vital-mini em{display:block;font-style:normal;font-size:8px;color:#2a8a76;font-weight:900;margin-top:3px}.vital-mini em.bad{color:#c54a43}
-.trend-card{position:relative}.range-pills{display:flex;gap:3px}.range-pills button{height:25px;padding:0 7px!important;border:0!important;background:transparent!important;color:#748792!important;border-radius:5px!important;font-size:8px!important;font-weight:900!important}.range-pills button.active{background:#eef4ff!important;color:#316bd0!important}
-.trend-summary{display:flex;align-items:baseline;gap:7px;margin:-2px 0 5px}.trend-summary strong{font-size:22px;color:#193649}.trend-summary span{font-size:9px;color:#81919c}.trend-summary em{margin-left:auto;padding:4px 7px;border-radius:11px;font-size:8px;font-style:normal;font-weight:900;color:#2a8976;background:#eaf7f2}.trend-summary em.alert{color:#b33f39;background:#fff0ee}
-.dashboard-chart{position:relative;border:1px solid #e8eef1;border-radius:9px;background:#fcfdfe;padding:6px 9px 1px 29px}.dashboard-chart svg{width:100%;height:190px;display:block}.chart-grid-line{stroke:#e6edf1;stroke-width:1}.dashboard-trend-line{fill:none;stroke:#e75f66;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.chart-labels{position:absolute;left:7px;top:13px;bottom:28px;display:flex;flex-direction:column;justify-content:space-between;font-size:7px;color:#96a6af}.chart-times{display:flex;justify-content:space-between;padding:0 15px 5px 0;font-size:7px;color:#9aa8b0}.chart-link{margin:7px 0 0 auto;display:block;border:0!important;background:transparent!important;color:#2b6e9b!important;padding:0!important;font-size:9px!important;font-weight:900!important}
-.lower-panels{grid-template-columns:1.06fr .94fr}.alert-table-row{display:grid;grid-template-columns:55px 95px 1fr 86px;gap:8px;align-items:center;padding:10px 7px;border-bottom:1px solid #edf2f4;font-size:9px;color:#627986;cursor:pointer}.alert-table-row:not(.alert-header):hover{background:#fbfcfd}.alert-header{padding-top:0;color:#9aa8af;font-size:8px;text-transform:uppercase;letter-spacing:.04em;cursor:default}.alert-table-row span:nth-child(2){font-weight:800;color:#2b4e61}.alert-table-row span:nth-child(3){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.alert-pill{display:inline-block;font-style:normal;font-size:8px;padding:4px 6px;border-radius:10px;background:#fff0ee;color:#b5433c;font-weight:900}.alert-pill.warning{background:#fff6df;color:#9a6c14}
-.appointment-line{display:grid;grid-template-columns:61px 1fr 75px;gap:10px;align-items:center;padding:10px 2px;border-bottom:1px solid #edf2f4}.appt-time b{display:block;color:#28465a;font-size:10px}.appt-time span{display:block;color:#95a3ab;font-size:8px;margin-top:2px}.appt-person b{display:block;color:#1c3b4e;font-size:10px}.appt-person span{display:block;color:#8696a0;font-size:8px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.appointment-line em{justify-self:end;font-style:normal;background:#edf7f4;color:#2c7b6c;border:1px solid #d6eae3;border-radius:10px;padding:4px 6px;font-size:8px;font-weight:900}
-.dashboard-bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}.risk-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.risk-circle-wrap{border:1px solid #e5ecef;background:#fbfcfd;border-radius:9px;padding:11px;display:grid;grid-template-columns:58px 1fr;grid-template-rows:auto auto;column-gap:9px;align-items:center}.risk-circle{width:55px;height:55px;border-radius:50%;grid-row:1 / 3;display:grid;place-items:center;position:relative;background:conic-gradient(#1da58b 86deg,#e8eef1 86deg);border:6px solid #f1f6f7;box-sizing:border-box}.risk-circle:after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff}.risk-circle strong,.risk-circle span{position:relative;z-index:1}.risk-circle strong{font-size:14px;color:#244355}.risk-circle span{display:none}.risk-circle.diabetes{background:conic-gradient(#5d8fe2 70deg,#e8eef1 70deg)}.risk-circle-wrap>b{font-size:9px;color:#526c79}.risk-circle-wrap>em{font-size:8px;font-style:normal;color:#239175;font-weight:900}.factor-strip{display:flex;gap:8px;margin-top:10px}.factor-strip span{flex:1;min-width:0}.factor-strip b{display:block;font-size:8px;color:#627b87;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.factor-strip i{display:block;height:4px;border-radius:5px;background:#53a3dc;margin-top:4px;max-width:100%}
-.care-preview-card{display:flex;flex-direction:column}.care-progress-head{display:flex;align-items:baseline;gap:8px}.care-progress-head strong{font-size:27px;color:#197f72}.care-progress-head span{font-size:9px;color:#78909a;font-weight:800}.care-progress-bar{height:8px;border-radius:5px;background:#e9eff1;margin:8px 0 9px;overflow:hidden}.care-progress-bar i{display:block;height:100%;background:#28af91;border-radius:5px}.care-progress-foot{display:flex;justify-content:space-between;gap:10px;font-size:8px;color:#8a9aa3}.care-progress-foot b{color:#3d6472;font-weight:800}.dashboard-flow-note{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:1px solid #dce7eb;border-radius:9px}.flow-dot{width:8px;height:8px;border-radius:50%;background:#15947e;flex:0 0 auto}.dashboard-flow-note div{flex:1}.dashboard-flow-note b{display:block;font-size:10px;color:#25495b}.dashboard-flow-note small{display:block;font-size:8px;color:#84969f;margin-top:3px}.dashboard-flow-note em{font-size:8px;font-style:normal;color:#637983;background:#f0f5f7;border:1px solid #dfe7eb;padding:5px 7px;border-radius:12px;white-space:nowrap}.dash-empty{padding:20px 0;text-align:center;color:#91a0a8;font-size:10px}
-@media(max-width:1180px){.dashboard-stat-row{grid-template-columns:repeat(2,1fr)}.dashboard-two-col,.dashboard-bottom-grid{grid-template-columns:1fr}.vital-card-row{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:760px){.dashboard-page{padding:12px!important}.dashboard-toolbar{height:auto;align-items:stretch;flex-direction:column}.dashboard-search{width:100%}.dashboard-toolbar-right{justify-content:flex-end}.dashboard-heading{flex-direction:column}.dashboard-heading h2{font-size:24px}.dashboard-stat-row{grid-template-columns:1fr}.vital-card-row{grid-template-columns:repeat(2,1fr)}.patient-banner{align-items:flex-start}.patient-badges{display:none}.alert-table-row{grid-template-columns:45px 75px 1fr 68px}.dashboard-bottom-grid{grid-template-columns:1fr}.dashboard-flow-note{align-items:flex-start}.dashboard-flow-note em{display:none}}
-
-
-/* =====================================================
-   REFERENCE DASHBOARD · MATCH THE PROVIDED CLINICAL SCREEN
-   Dark clinical workspace with the same hierarchy and spacing.
-   ===================================================== */
-.app:has(.dashboard-page){background:#060b18!important;color:#eef4ff!important}
-.app:has(.dashboard-page) main{background:#060b18!important}
-.app:has(.dashboard-page) .clinical-topnav{display:none!important}
-.app:has(.dashboard-page) aside{width:218px!important;background:#071021!important;border-right:1px solid #1a2946!important;padding:18px 12px!important;box-shadow:none!important}
-.app:has(.dashboard-page) aside .logo{padding:4px 9px 20px!important;margin-bottom:10px!important;border-bottom:1px solid #1a2946!important}
-.app:has(.dashboard-page) aside .logo>span{width:36px!important;height:36px!important;border-radius:10px!important;background:#1e67ed!important;box-shadow:0 0 18px rgba(47,118,255,.24)!important}
-.app:has(.dashboard-page) aside .logo b{font-size:15px!important;color:#f4f7ff!important}
-.app:has(.dashboard-page) aside .logo small{font-size:8px!important;color:#7890ae!important}
-.app:has(.dashboard-page) aside>button,.app:has(.dashboard-page) .side-bottom>button{color:#a8bad3!important;border-radius:8px!important;padding:9px 10px!important;font-size:11px!important;border:1px solid transparent!important;background:transparent!important}
-.app:has(.dashboard-page) aside>button:hover,.app:has(.dashboard-page) .side-bottom>button:hover{background:#101e38!important;color:#eef5ff!important}
-.app:has(.dashboard-page) aside>button.active{background:#3468ee!important;color:#fff!important;border-color:#4778f4!important;box-shadow:0 5px 18px rgba(38,86,220,.22)!important}
-.app:has(.dashboard-page) .side-bottom{border-top:1px solid #1a2946!important}
-.app:has(.dashboard-page) .user-mini{color:#edf4ff!important}.app:has(.dashboard-page) .user-mini small{color:#6f86a5!important}
-.app:has(.dashboard-page) .content.dashboard-page{padding:20px 24px 26px!important;background:#060b18!important;max-width:none!important;color:#eef4ff!important}
-.ref-dashboard-topbar{height:54px;display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}
-.ref-search{width:min(460px,50%);height:36px;background:#0e1830;border:1px solid #203152;border-radius:18px;display:flex;align-items:center;padding:0 13px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.01)}
-.ref-search span{font-size:17px;color:#6e86a7}.ref-search input{flex:1;background:transparent!important;border:0!important;outline:0!important;color:#dce6f6!important;font-size:10px!important;padding:0 8px!important}.ref-search input::placeholder{color:#6f84a4!important}
-.ref-top-actions{display:flex;align-items:center;gap:10px}.ref-top-icon{position:relative;width:34px;height:34px;border-radius:50%;border:1px solid #203152!important;background:#0e1830!important;color:#c1d0e4!important;padding:0!important}.ref-top-icon i{position:absolute;top:-4px;right:-2px;min-width:14px;height:14px;border-radius:8px;background:#f0444e;color:#fff;font-style:normal;font-size:7px;display:grid;place-items:center;border:2px solid #060b18}
-.ref-mini-profile{display:flex;align-items:center;gap:9px}.ref-profile-avatar{width:34px;height:34px;border-radius:50%;background:#31567f;color:#fff;display:grid;place-items:center;font-size:9px;font-weight:900}.ref-mini-profile b{display:block;color:#eef4ff;font-size:10px}.ref-mini-profile small{display:block;color:#7389a7;font-size:8px;margin-top:2px}
-.ref-dashboard-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:15px;margin-bottom:18px}.ref-dashboard-heading h2{font-size:22px;color:#f4f7ff;margin:0 0 4px;font-weight:800;letter-spacing:-.02em}.ref-dashboard-heading p{margin:0;color:#6f86a4;font-size:10px}.ref-heading-meta{display:flex;align-items:center;gap:8px}.ref-heading-meta>span{padding:8px 10px;border:1px solid #203152;border-radius:7px;background:#0c162b;color:#9fb2cc;font-size:9px}.ref-heading-meta button{padding:8px 10px!important;background:#0c162b!important;border:1px solid #203152!important;color:#c2d0e0!important;border-radius:7px!important;font-size:9px!important}.ref-heading-meta em{font-style:normal;font-size:8px;padding:7px 9px;border:1px solid #0c6f54;background:#071e1a;color:#43d6a6;border-radius:7px;font-weight:800}.ref-heading-meta em b{display:inline-block;width:6px;height:6px;border-radius:50%;background:#16cc91;margin-right:4px}
-.ref-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.ref-kpi{display:flex;align-items:center;gap:12px;text-align:left;min-height:82px;padding:13px 15px!important;border-radius:12px!important;border:1px solid #1d2d50!important;background:#0c162b!important;color:#fff!important;box-shadow:none!important}.ref-kpi:hover{background:#101c35!important;border-color:#2a4070!important;transform:translateY(-1px)}.ref-kpi-icon{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:15px;font-weight:900;flex:0 0 auto}.ref-kpi small{display:block;color:#7c91ad;font-size:9px}.ref-kpi strong{display:inline-block;font-size:26px;line-height:1;margin:4px 6px 2px 0;color:#eef5ff}.ref-kpi em{font-style:normal;font-size:8px;font-weight:800}.ref-kpi-blue .ref-kpi-icon{background:#0f2b56;color:#52a0ff}.ref-kpi-blue em{color:#22d39a}.ref-kpi-green .ref-kpi-icon{background:#102f2a;color:#32d7a4}.ref-kpi-green em{color:#38d6a3}.ref-kpi-red .ref-kpi-icon{background:#3a161b;color:#ff636b}.ref-kpi-red em{color:#ff8b8f}.ref-kpi-purple .ref-kpi-icon{background:#251b47;color:#a88afc}.ref-kpi-purple em{color:#6fe7b9}
-.ref-main-grid,.ref-second-grid{display:grid;grid-template-columns:1.6fr .95fr;gap:12px;margin-bottom:12px}.ref-second-grid{grid-template-columns:1fr 1fr}.ref-card{background:#0c162b;border:1px solid #1d2d50;border-radius:12px;padding:15px;box-shadow:none;color:#eef4ff}.ref-card-title{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}.ref-card-title h3{margin:0;color:#eef4ff;font-size:13px}.ref-card-title p{margin:4px 0 0;color:#677f9f;font-size:8px}.ref-more-btn{background:transparent!important;color:#6e83a2!important;border:0!important;font-size:16px!important;padding:0!important}
-.ref-live-chip{padding:6px 9px;border:1px solid #0d775a;background:#071e1a;color:#35d2a1;border-radius:7px;font-size:8px;font-weight:900}.ref-live-chip b{display:inline-block;width:6px;height:6px;border-radius:50%;background:#21dc9e;margin-right:4px}.ref-ecg{height:155px;position:relative;border-radius:8px;overflow:hidden;background:#091329;border:1px solid #172744}.ref-ecg-grid{position:absolute;inset:0;background:linear-gradient(rgba(73,112,165,.10) 1px,transparent 1px),linear-gradient(90deg,rgba(73,112,165,.06) 1px,transparent 1px);background-size:100% 31px,56px 100%}.ref-ecg svg{position:absolute;inset:8px;width:100%;height:calc(100% - 16px)}.ref-ecg-line{fill:none;stroke:#20e49d;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 5px rgba(32,228,157,.45))}
-.ref-monitor-values{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.ref-monitor-values>div{padding:6px 3px}.ref-monitor-values small{display:block;color:#7187a5;font-size:8px}.ref-monitor-values strong{font-size:17px;color:#f0f5ff;margin-right:3px}.ref-monitor-values span{font-size:8px;color:#6f84a1}.ref-monitor-values>div:nth-child(1) strong{color:#ff7580}.ref-monitor-values>div:nth-child(2) strong{color:#5ea4ff}.ref-monitor-values>div:nth-child(4) strong{color:#ffba2f}.ref-card-link{margin-top:6px;background:transparent!important;border:0!important;color:#74a5ff!important;padding:0!important;font-size:8px!important;font-weight:800!important}
-.ref-risk-layout{display:grid;grid-template-columns:118px 1fr;gap:16px;align-items:center;min-height:210px}.ref-risk-donut{width:112px;height:112px;border-radius:50%;background:conic-gradient(#22d38f var(--risk-angle,86.4deg),#1b2a49 var(--risk-angle,86.4deg));display:grid;place-items:center;position:relative;border:10px solid #0e1930}.ref-risk-donut:after{content:"";position:absolute;inset:11px;border-radius:50%;background:#0c162b}.ref-risk-donut strong,.ref-risk-donut span{position:relative;z-index:1}.ref-risk-donut strong{font-size:22px;color:#eff5ff}.ref-risk-donut span{position:absolute;margin-top:42px;color:#25d895;font-size:8px;font-weight:900}.ref-factor-list h4{margin:0 0 9px;color:#93a8c2;font-size:9px;font-weight:700}.ref-factor-label{display:flex;justify-content:space-between;gap:8px;color:#6f86a4;font-size:8px;margin-bottom:4px}.ref-factor-label b{color:#a9bad0}.ref-factor-list>div:not(.ref-factor-label){margin-bottom:4px}.ref-factor-list>i{display:block;height:4px;background:#172744;border-radius:5px;margin:0 0 9px}.ref-factor-list>i em{display:block;height:100%;background:#3c79ec;border-radius:5px}.ref-factor-list>i:nth-of-type(2n) em{background:#a07bff}.ref-factor-list>i:nth-of-type(3n) em{background:#ffb72f}.ref-factor-list>i:nth-of-type(4n) em{background:#f15f73}
-.ref-outline-btn{background:#101d35!important;border:1px solid #284063!important;color:#a9c9ff!important;border-radius:7px!important;padding:6px 9px!important;font-size:8px!important;font-weight:800!important}.ref-table{width:100%}.ref-table-head,.ref-table-row{display:grid;grid-template-columns:58px 1fr 70px 1.35fr 73px;gap:8px;align-items:center}.ref-table-head{padding:0 5px 7px;color:#57708f;font-size:8px;border-bottom:1px solid #1b2c4a}.ref-table-row{padding:9px 5px;border-bottom:1px solid #152541;color:#7d92ae;font-size:8px}.ref-table-row:last-child{border-bottom:0}.ref-table-row:hover{background:#0e1930}.ref-table-row span{min-width:0}.ref-table-row span:nth-child(2) b{display:block;color:#dce6f5;font-size:8px}.ref-table-row span:nth-child(2) small{display:block;color:#536b89;font-size:7px;margin-top:2px}.ref-table-row>span:nth-child(4){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ref-table-row em{display:inline-block;font-style:normal;font-size:7px;padding:4px 6px;border-radius:9px;background:#401b20;color:#ff757d;font-weight:900}.ref-table-row em.warn{background:#3b2b0d;color:#ffc84b}.ref-empty{padding:18px;text-align:center;color:#57708e;font-size:9px}.ref-appointments-table .ref-table-head,.ref-appointments-table .ref-table-row{grid-template-columns:58px 1fr 1fr 78px}.appt-status{background:#083523!important;color:#36d59d!important}.ref-care-card{margin-bottom:0}.ref-care-card .ref-card-title{margin-bottom:10px}.ref-care-row{display:flex;align-items:center;gap:12px}.ref-progress{height:7px;background:#1b2a49;border-radius:8px;overflow:hidden;flex:1}.ref-progress i{display:block;height:100%;background:linear-gradient(90deg,#2c63ee,#9b60f4);border-radius:8px}.ref-care-row strong{font-size:16px;color:#e9f2ff}.ref-care-meta{display:flex;justify-content:space-between;gap:12px;margin-top:7px;color:#68809e;font-size:8px}.ref-care-meta span:last-child{color:#8ba0ba}
-@media(max-width:1180px){.ref-kpi-grid{grid-template-columns:repeat(2,1fr)}.ref-main-grid,.ref-second-grid{grid-template-columns:1fr}.ref-risk-layout{grid-template-columns:120px 1fr}}
-@media(max-width:760px){.app:has(.dashboard-page) aside{width:72px!important}.app:has(.dashboard-page) aside .logo div,.app:has(.dashboard-page) aside .logo small,.app:has(.dashboard-page) aside>button span,.app:has(.dashboard-page) .user-mini{display:none!important}.app:has(.dashboard-page) aside .logo{justify-content:center}.app:has(.dashboard-page) aside>button{justify-content:center}.app:has(.dashboard-page) .content.dashboard-page{padding:14px!important}.ref-dashboard-topbar{height:auto}.ref-search{width:100%}.ref-top-actions .ref-mini-profile div{display:none}.ref-dashboard-heading{align-items:flex-start;flex-direction:column}.ref-heading-meta{width:100%;flex-wrap:wrap}.ref-kpi-grid{grid-template-columns:1fr}.ref-monitor-values{grid-template-columns:repeat(2,1fr)}.ref-table-head{display:none}.ref-table-row,.ref-appointments-table .ref-table-row{grid-template-columns:1fr 1fr;padding:9px}.ref-risk-layout{grid-template-columns:100px 1fr}.ref-risk-donut{width:94px;height:94px}}
-
-
+:host{--s4-ink:#183b52;--s4-muted:#728894;--s4-bg:#f3f8fa;--s4-card:#ffffff;--s4-line:#dce9ed;--s4-teal:#0aa58f;--s4-teal2:#0c8e7c;--s4-blue:#4a78d4;--s4-purple:#8067d9;display:block;background:var(--s4-bg);}
+*{box-sizing:border-box}
+.app.clinical-app{background:radial-gradient(circle at 78% 12%,rgba(39,180,163,.09),transparent 26%),linear-gradient(135deg,#f7fbfc,#eef5f7);color:var(--s4-ink);min-height:100vh}
+.clinical-sidebar{width:252px!important;min-width:252px!important;background:linear-gradient(180deg,#ffffff 0%,#f7fbfc 100%)!important;color:var(--s4-ink)!important;border-right:1px solid #dce8ec!important;box-shadow:8px 0 30px rgba(32,70,85,.055);position:relative;z-index:5}
+.clinical-sidebar:after{content:"";position:absolute;right:-1px;top:90px;width:2px;height:120px;background:linear-gradient(#0aa58f,transparent);opacity:.8}
+.clinical-logo{padding:10px 12px 26px!important}
+.clinical-logo .logo-mark{background:linear-gradient(135deg,#0bb59d,#2b8fd0)!important;box-shadow:0 10px 24px rgba(10,165,143,.24);animation:logoFloat 4s ease-in-out infinite}
+.clinical-logo b{color:#123b52!important;font-size:16px!important}.clinical-logo small{color:#8a9da7!important}
+.sidebar-label{color:#93a6ae!important;letter-spacing:1.7px;font-size:9px!important;font-weight:900;margin:8px 12px}
+.clinical-sidebar .nav-item{color:#587180!important;background:transparent!important;border:1px solid transparent!important;min-height:42px;margin:3px 7px!important;border-radius:12px!important;position:relative;overflow:hidden;transition:all .22s ease!important}
+.clinical-sidebar .nav-item:hover{background:#eef8f6!important;color:#087f70!important;transform:translateX(3px)}
+.clinical-sidebar .nav-item.active{background:linear-gradient(90deg,#dff7f2,#edf9f7)!important;color:#087d6d!important;border-color:#c4e9e2!important;box-shadow:0 7px 18px rgba(10,165,143,.08),inset 3px 0 #0aa58f!important}
+.clinical-sidebar .nav-item.active:after{content:"";position:absolute;right:10px;top:50%;width:6px;height:6px;border-radius:50%;background:#0aa58f;box-shadow:0 0 0 5px rgba(10,165,143,.10);transform:translateY(-50%);animation:statusPulse 1.8s infinite}
+.nav-icon{color:#0b9d88!important}.nav-arrow{color:#0aa58f!important}
+.sidebar-footer{border-top:1px solid #e2ecef!important}.sidebar-user{background:#f5fafb;border:1px solid #e2ecef;border-radius:13px;padding:9px!important}.doctor-avatar-small{background:linear-gradient(135deg,#dff8f3,#e3efff)!important;color:#087f70!important}.sidebar-user b{color:#21465a!important}.sidebar-user small{color:#8b9da5!important}
+.logout-btn{color:#728995!important}.logout-btn:hover{background:#fff0f0!important;color:#b33c3c!important}
+.clinical-main{background:transparent!important}
+.clinical-topbar{background:rgba(255,255,255,.88)!important;backdrop-filter:blur(14px);border-bottom:1px solid #dfeaec!important;box-shadow:0 5px 24px rgba(40,75,88,.035);position:sticky;top:0;z-index:4}
+.context-kicker,.eyebrow{color:#0a9a85!important;font-weight:900;letter-spacing:1.35px!important;font-size:9px!important}.page-context h1{color:#173d53!important}
+.milestone-strip button{background:#f7fbfc!important;border-color:#dce8ec!important;color:#718792!important;border-radius:11px!important;transition:all .2s ease}.milestone-strip button:hover{transform:translateY(-2px);border-color:#a9ddd4!important}.milestone-strip button.active{background:#e4f8f4!important;border-color:#b4e3da!important;color:#087c6c!important;box-shadow:0 5px 14px rgba(10,165,143,.08)}
+.clinical-search{background:#f7fafb!important;border-color:#dce8ec!important;box-shadow:inset 0 1px 2px rgba(0,0,0,.02)}.search-btn{background:linear-gradient(135deg,#0aa58f,#087f70)!important;box-shadow:0 5px 14px rgba(10,165,143,.16)}
+.top-icon-btn{background:#fff!important;border:1px solid #dce8ec!important;color:#456575!important;border-radius:11px!important;position:relative}.alert-badge{animation:badgePulse 1.7s infinite}.system-state{color:#5f7d88!important}.system-state i{background:#0aa58f!important;box-shadow:0 0 0 5px rgba(10,165,143,.10);animation:statusPulse 1.8s infinite}.refresh-btn{background:#fff!important;border:1px solid #dce8ec!important;color:#486576!important;border-radius:10px!important}
+.patient-context-bar{background:rgba(255,255,255,.92)!important;border-bottom:1px solid #e1ebee!important;box-shadow:0 3px 18px rgba(28,65,80,.025)}
+.selected-patient-chip .avatar,.avatar{background:linear-gradient(135deg,#dff7f2,#e4efff)!important;color:#087e6d!important;border:1px solid #c9e9e4}
+.context-actions button{background:#fff!important;border-color:#d9e6ea!important;color:#476473!important}.context-actions button:hover{border-color:#8fd4c8!important;color:#087f70!important}
+.content{animation:pageEnter .42s ease both}
+.hero,.care-hero,.monitor-hero,.section-hero{background:linear-gradient(120deg,#ffffff 0%,#eef9f7 55%,#eef5ff 100%)!important;border:1px solid #d8e9e9!important;box-shadow:0 15px 35px rgba(36,76,91,.07)!important;position:relative;overflow:hidden}
+.hero:after,.care-hero:after,.monitor-hero:after{content:"";position:absolute;width:230px;height:230px;border-radius:50%;right:-80px;top:-120px;background:radial-gradient(circle,rgba(10,165,143,.15),transparent 65%);animation:orbFloat 7s ease-in-out infinite}
+.hero-icon{background:linear-gradient(135deg,#0aa58f,#4778d5)!important;box-shadow:0 14px 30px rgba(10,165,143,.20)!important;animation:heroIconPulse 3s ease-in-out infinite}
+.cards{gap:14px!important}.metric{border:1px solid #dce8ec!important;background:rgba(255,255,255,.92)!important;border-radius:16px!important;box-shadow:0 8px 24px rgba(36,76,91,.055)!important;position:relative;overflow:hidden;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}.metric:before{content:"";position:absolute;left:0;top:0;width:100%;height:3px;background:linear-gradient(90deg,#0aa58f,#4a78d4);opacity:.85}.metric:hover{transform:translateY(-4px);box-shadow:0 15px 30px rgba(36,76,91,.09)!important;border-color:#c7e2e2!important}.metric b{color:#163c53!important}.metric span{color:#78909b!important}.metric.warn:before{background:linear-gradient(90deg,#f0ad45,#ef7e57)}.metric.danger:before{background:linear-gradient(90deg,#e75c63,#d73c68)}.care-metric:before{background:linear-gradient(90deg,#8067d9,#4a78d4)}
+.panel{border:1px solid #dce8ec!important;background:rgba(255,255,255,.94)!important;border-radius:17px!important;box-shadow:0 8px 25px rgba(36,76,91,.045)!important;transition:box-shadow .2s ease,border-color .2s ease}.panel:hover{border-color:#cfe2e5!important;box-shadow:0 13px 30px rgba(36,76,91,.065)!important}.panel h3{color:#193f55!important}.panel p{color:#78909b!important}
+.command-grid{gap:16px!important}.patient-quick{border:1px solid #e3edef!important;background:#fbfdfd!important;border-radius:12px!important;transition:all .2s ease}.patient-quick:hover{transform:translateX(4px);border-color:#bfe2db!important;background:#f1faf8!important}
+/* ANALYTICS */
+.style4-analytics-grid{display:grid;grid-template-columns:1.12fr .88fr;gap:16px;margin-top:16px}.analytics-panel,.architecture-panel,.registry-panel{overflow:hidden}.analytics-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.analytics-heading h3{margin:3px 0 4px!important;font-size:16px!important}.analytics-heading p{margin:0!important;font-size:10px!important}.analytics-live{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#e8f8f4;color:#087d6d;font-size:8px;font-weight:900;letter-spacing:.8px;white-space:nowrap}.analytics-live i{width:6px;height:6px;border-radius:50%;background:#0aa58f;box-shadow:0 0 0 4px rgba(10,165,143,.1);animation:statusPulse 1.5s infinite}.bar-chart{display:flex;flex-direction:column;gap:16px}.bar-row{display:grid;gap:7px}.bar-label{display:flex;justify-content:space-between;align-items:center;font-size:10px}.bar-label span{color:#6e8792}.bar-label b{color:#244b5f;font-size:11px}.bar-track{height:10px;background:#edf4f5;border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(20,60,70,.06)}.bar-track>span{display:block;height:100%;min-width:0;border-radius:999px;background:linear-gradient(90deg,#0aa58f,#55cdbb);box-shadow:0 3px 8px rgba(10,165,143,.18);animation:barGrow .8s cubic-bezier(.2,.8,.2,1) both}.alert-track>span{background:linear-gradient(90deg,#f0aa4c,#e45b68)}.care-track>span{background:linear-gradient(90deg,#8067d9,#4a78d4)}.workflow-figure{height:190px;display:grid;place-items:center;background:linear-gradient(145deg,#f7fcfc,#f2f7fd);border:1px solid #e1ecef;border-radius:14px;overflow:hidden}.workflow-figure svg{width:100%;height:100%}.flow-line{stroke:url(#msFlow);stroke-width:4;stroke-linecap:round;stroke-dasharray:8 10;animation:flowMove 2s linear infinite}.flow-node{fill:#fff;stroke:#b8ddd7;stroke-width:2;filter:drop-shadow(0 5px 8px rgba(20,90,90,.08))}.flow-pulse{fill:#0aa58f;animation:nodePulse 2s ease-in-out infinite}.flow-pulse:nth-of-type(2){animation-delay:.2s}.flow-pulse:nth-of-type(3){animation-delay:.4s}.flow-pulse:nth-of-type(4){animation-delay:.6s}.flow-pulse:nth-of-type(5){animation-delay:.8s}.workflow-figure text{fill:#496775;font:700 11px Inter,Arial,sans-serif}.workflow-caption{margin-top:10px;color:#718994;font-size:9px}.workflow-caption span{color:#0aa58f}.registry-panel{margin-top:16px}.table-wrap{overflow:auto;border:1px solid #e2ecef;border-radius:13px}.style4-table{width:100%;border-collapse:separate;border-spacing:0;min-width:760px;background:#fff}.style4-table th{background:#f6fafb!important;color:#718792!important;font-size:8px!important;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #e2ecef!important;padding:12px 14px!important}.style4-table td{padding:12px 14px!important;border-bottom:1px solid #edf2f4!important;color:#4a6674;font-size:10px}.style4-table tbody tr{cursor:pointer;transition:background .18s ease,transform .18s ease}.style4-table tbody tr:hover{background:#f2faf8;box-shadow:inset 3px 0 #0aa58f}.table-patient{display:flex;align-items:center;gap:9px}.table-patient>span{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#e5f7f3;color:#087d6d;font-weight:900}.table-patient b{display:block;color:#23495d;font-size:10px}.table-patient small{display:block;color:#94a4ab;margin-top:2px}.style4-table code{font-size:9px;color:#4a6b7b;background:#f3f7f8;padding:4px 6px;border-radius:6px}.table-status{display:inline-flex;align-items:center;gap:5px;background:#eff9f7;color:#087d6d;padding:5px 8px;border-radius:999px;font-size:8px;font-weight:800}.table-status i{width:5px;height:5px;border-radius:50%;background:#0aa58f}.table-link{background:#eef9f7!important;border:1px solid #c7e7e1!important;color:#087d6d!important;border-radius:9px!important;padding:8px 11px!important;font-size:9px!important}.row-open{background:#fff!important;border:1px solid #d7e6e9!important;color:#477080!important;border-radius:8px!important;padding:6px 9px!important;font-size:8px!important}.row-open:hover{border-color:#9bd5cb!important;color:#087d6d!important}
+/* tables across app */
+table{border:1px solid #dfeaec!important;border-radius:14px!important;border-collapse:separate!important;border-spacing:0!important;overflow:hidden;background:#fff}thead th{background:linear-gradient(#f8fbfc,#f3f8f9)!important;color:#718893!important;border-bottom:1px solid #dfeaec!important}tbody tr{transition:background .18s ease}tbody tr:hover{background:#f4faf9}td{border-bottom:1px solid #edf2f4!important}
+/* inputs */
+input,select,textarea{border:1px solid #d8e6ea!important;background:#fbfdfd!important;color:#23485c!important;border-radius:10px!important;transition:border-color .2s,box-shadow .2s,background .2s!important}input:focus,select:focus,textarea:focus{border-color:#72cbbd!important;box-shadow:0 0 0 3px rgba(10,165,143,.10)!important;background:#fff!important;outline:none!important}
+button{transition:transform .18s ease,box-shadow .18s ease,background .18s ease,border-color .18s ease!important}button:hover:not(:disabled){transform:translateY(-2px)}button:active:not(:disabled){transform:translateY(0) scale(.98)}button.primary{background:linear-gradient(135deg,#0aa58f,#087e6d)!important;box-shadow:0 7px 17px rgba(10,165,143,.16)!important}button.primary:hover:not(:disabled){box-shadow:0 11px 23px rgba(10,165,143,.23)!important}
+.live-vital{border:1px solid #dce9ec!important;background:linear-gradient(145deg,#fff,#f7fbfc)!important;position:relative;overflow:hidden}.live-vital:after{content:"";position:absolute;width:80px;height:80px;right:-30px;bottom:-35px;border-radius:50%;background:rgba(10,165,143,.06)}.pulse-dot{animation:statusPulse 1.5s infinite}.trend-chart{border:1px solid #dce9ec!important;background:linear-gradient(180deg,#fbfefe,#f2f8f9)!important;box-shadow:inset 0 1px 12px rgba(20,70,80,.025)}.chart-sweep{background:linear-gradient(90deg,transparent,rgba(10,165,143,.22),transparent)!important;animation:sweep 2.2s linear infinite!important}
+@keyframes pageEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes logoFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-3px) rotate(1deg)}}@keyframes heroIconPulse{0%,100%{box-shadow:0 14px 30px rgba(10,165,143,.18);transform:scale(1)}50%{box-shadow:0 18px 38px rgba(10,165,143,.28);transform:scale(1.035)}}@keyframes statusPulse{0%{box-shadow:0 0 0 0 rgba(10,165,143,.30)}70%{box-shadow:0 0 0 7px rgba(10,165,143,0)}100%{box-shadow:0 0 0 0 rgba(10,165,143,0)}}@keyframes badgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}@keyframes orbFloat{0%,100%{transform:translate(0,0)}50%{transform:translate(-20px,14px)}}@keyframes barGrow{from{width:0;opacity:.35}to{opacity:1}}@keyframes flowMove{to{stroke-dashoffset:-36}}@keyframes nodePulse{0%,100%{opacity:.75;transform:scale(1);transform-origin:center}50%{opacity:1;transform:scale(1.45);transform-origin:center}}@keyframes sweep{from{transform:translateX(-120%)}to{transform:translateX(520%)}}
+@media(max-width:1050px){.style4-analytics-grid{grid-template-columns:1fr}.clinical-sidebar{width:220px!important;min-width:220px!important}}
+@media(max-width:800px){.clinical-sidebar{width:74px!important;min-width:74px!important}.clinical-sidebar .logo div,.sidebar-label,.clinical-sidebar .nav-item span:not(.nav-icon),.sidebar-user>div:not(.doctor-avatar-small){display:none!important}.style4-analytics-grid{grid-template-columns:1fr}.clinical-topbar{height:auto!important;min-height:84px!important;flex-wrap:wrap!important;gap:10px!important;padding:12px!important}.topbar-actions{flex-wrap:wrap!important}.content{padding:18px!important}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 
 /* =========================================================
-   GLOBAL DARK CLINICAL THEME — M5 VISUAL PASS
+   MEDISPHERE 2026 UI SYSTEM — visual layer only
    ========================================================= */
-:host{--bg:#07111f;--surface:#0d1829;--surface-2:#111f33;--border:#203453;--border-soft:#172943;--text:#eef5ff;--muted:#8296b3;--blue:#5ea4ff;--cyan:#33d8d1;--green:#35d5a1;--red:#ff6470;--amber:#ffc24a;--purple:#a889ff;color:var(--text)!important;background:var(--bg)!important}
-.app,main,.content{background:var(--bg)!important;color:var(--text)!important}
-header{background:#0a1525!important;border-color:var(--border)!important;color:var(--text)!important}header h1{color:var(--text)!important}header p{color:var(--muted)!important}.live{color:var(--green)!important}
-aside{background:#06101d!important;border-right:1px solid var(--border-soft)!important;color:#d9e7f8!important}aside button{color:#8298b6!important}aside button.active,aside button:hover{background:#112844!important;color:#fff!important}.side-bottom{border-color:var(--border)!important}.user-mini{color:#e7f0fb!important}.user-mini small{color:#7187a5!important}.logo>span{background:#246fe8!important;box-shadow:0 8px 24px rgba(36,111,232,.24)!important}.logo small{color:#7186a2!important}
-.metric,.panel,.profile,.empty,.twin-panel,.form-card,.monitoring-controls,.live-graph-panel,.recent-readings-panel,.appointment-card,.patient-card,.consent-card,.alert-panel,.m4-history-panel,.care-summary{background:var(--surface)!important;border-color:var(--border)!important;color:var(--text)!important;box-shadow:0 10px 28px rgba(0,0,0,.14)!important}
-.metric span,.metric small,.muted,.empty-small,.twin-meta,.profile p,.panel p,.panel small,.m4-card small,.care-history-row small,.row small,td small{color:var(--muted)!important}.metric b,.panel h3,.profile h2,.panel-head h3,.m4-card h3,.care-summary h3,.section-title{color:var(--text)!important}.row,.mini-list div{border-color:var(--border-soft)!important}
-button{background:var(--surface-2)!important;border-color:var(--border)!important;color:#dce9f8!important}button:hover:not(:disabled){background:#162843!important;border-color:#2f4d79!important}.primary{background:#246fe8!important;color:#fff!important;border-color:#246fe8!important}.primary:hover:not(:disabled){background:#2f7bf2!important}.danger-btn{background:#421c25!important;color:#ff7f88!important;border-color:#71313e!important}
-.toolbar input,.form-grid input,.toolbar select,select,input,textarea{background:#0b1728!important;color:var(--text)!important;border-color:var(--border)!important}input::placeholder,textarea::placeholder{color:#58708f!important}select option{background:#0b1728;color:#eef5ff}
-th,td{border-color:var(--border-soft)!important;color:#b9c9dc!important}th{color:#7188a6!important}.tags span,.flow span,.pill{background:#102746!important;color:#72b2ff!important}.severity{background:#3b2d0b!important;color:#ffc84f!important}.severity.critical{background:#431b23!important;color:#ff7b84!important}.risk{border-color:#2f8ce8!important;background:#0c1b2f!important}.risk b,.risk-summary-line b{color:#55a7ff!important}.pre{background:#060d18!important;color:#bfe9ff!important;border:1px solid var(--border)!important}pre{background:#060d18!important;color:#bfe9ff!important;border:1px solid var(--border)!important}
-.twin-badge{background:#0d302e!important;color:#47d9c0!important}.monitor-status{color:#8297b2!important}.monitor-status.running{color:var(--green)!important}.monitor-live{background:#0a2c25!important;color:#45d6aa!important;border-color:#165744!important}.monitor-live.paused{background:#2a2230!important;color:#c9a9ff!important;border-color:#493c62!important}.chart-axis{stroke:#294263!important}.trend-range{color:#7187a5!important}.trend-range b{color:#dce8f8!important}.monitor-detail{background:#0d1a2d!important;border-color:var(--border-soft)!important;color:#cbd8e8!important}
-.care-task{background:#0d1b2f!important;border-color:var(--border)!important}.care-task.completed{background:#0d2a27!important;border-color:#1d6658!important}.care-task-status{background:#12243b!important;color:#9db2ce!important}.care-task.completed .care-task-status{background:#0d3d33!important;color:#53dfb2!important}
-.dashboard-page{color:var(--text)!important}.ref-search{background:#0c1629!important;border-color:#203453!important}.ref-search input{background:transparent!important;color:#eaf2ff!important;border:0!important}.ref-top-icon{background:#0c1629!important;border-color:#203453!important;color:#98acc8!important}.ref-top-icon:hover{background:#13233d!important}.ref-mini-profile b{color:#e6effa!important}.ref-mini-profile small{color:#6f85a2!important}.ref-dashboard-heading h2{color:#f4f7ff!important}.ref-dashboard-heading p{color:#7187a5!important}.ref-card{background:#0c162b!important;border-color:#1d2d50!important}.ref-card-title h3{color:#eef4ff!important}.ref-card-title p{color:#677f9f!important}.ref-outline-btn{background:#101d35!important}.ref-table-row{color:#8398b4!important;border-color:#152541!important}.ref-table-row span:nth-child(2) b{color:#dce6f5!important}
-@media(max-width:900px){.content{padding:22px!important}}
 
-  `]
+:host {
+  --ms-bg: #f4f7fb;
+  --ms-surface: rgba(255,255,255,.92);
+  --ms-surface-solid: #ffffff;
+  --ms-ink: #10243e;
+  --ms-muted: #70839a;
+  --ms-line: #e5ebf3;
+  --ms-primary: #4f46e5;
+  --ms-primary-2: #06b6a4;
+  --ms-blue: #3b82f6;
+  --ms-danger: #ef4444;
+  --ms-warning: #f59e0b;
+  --ms-shadow: 0 16px 45px rgba(20, 43, 76, .08);
+  --ms-shadow-lg: 0 24px 70px rgba(20, 43, 76, .13);
+}
+
+.app.clinical-app {
+  background:
+    radial-gradient(circle at 82% 0%, rgba(79,70,229,.07), transparent 27%),
+    radial-gradient(circle at 25% 18%, rgba(6,182,164,.045), transparent 28%),
+    var(--ms-bg);
+  color: var(--ms-ink);
+}
+
+/* Sidebar */
+.clinical-sidebar {
+  width: 270px;
+  padding: 18px 13px 14px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(99,102,241,.16), transparent 30%),
+    linear-gradient(180deg, #10182d 0%, #0c1426 58%, #0a1120 100%);
+  border-right: 1px solid rgba(255,255,255,.07);
+  box-shadow: 12px 0 35px rgba(9,18,38,.10);
+  position: relative;
+  z-index: 50;
+}
+
+.clinical-logo {
+  padding: 10px 12px 22px;
+  margin-bottom: 8px;
+}
+.clinical-logo .logo-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg,#6366f1,#14b8a6);
+  box-shadow: 0 10px 26px rgba(79,70,229,.32);
+}
+.clinical-logo b { color:#f8fbff; font-size:16px; letter-spacing:-.2px; }
+.clinical-logo small { color:#8492ad; font-size:9px; letter-spacing:.8px; text-transform:uppercase; }
+
+.sidebar-label {
+  padding: 12px 13px 8px;
+  color:#65738e;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:1.8px;
+}
+
+.clinical-sidebar .nav-item {
+  width:100%;
+  min-height:45px;
+  margin:3px 0;
+  padding:0 12px;
+  border:1px solid transparent;
+  border-radius:12px;
+  color:#9ba9bf;
+  background:transparent;
+  display:flex;
+  align-items:center;
+  gap:11px;
+  font-size:12px;
+  font-weight:650;
+  transition:transform .2s ease, background .2s ease, color .2s ease, border-color .2s ease;
+}
+.clinical-sidebar .nav-item:hover {
+  transform:translateX(2px);
+  color:#eef3ff;
+  background:rgba(255,255,255,.055);
+  border-color:rgba(255,255,255,.06);
+}
+.clinical-sidebar .nav-item.active {
+  color:#fff;
+  background:linear-gradient(90deg,rgba(99,102,241,.25),rgba(20,184,166,.11));
+  border-color:rgba(129,140,248,.20);
+  box-shadow:inset 3px 0 0 #818cf8, 0 8px 24px rgba(0,0,0,.10);
+}
+.nav-icon {
+  width:29px;
+  height:29px;
+  display:grid;
+  place-items:center;
+  flex:0 0 29px;
+  border-radius:9px;
+  background:rgba(255,255,255,.045);
+  color:#aebaff;
+  font-size:14px;
+}
+.nav-item.active .nav-icon { background:rgba(129,140,248,.16); color:#c7d2fe; }
+.nav-arrow { margin-left:auto; color:#8b96ff; font-size:20px; line-height:1; }
+
+.sidebar-footer {
+  border-top:1px solid rgba(255,255,255,.07);
+  padding:14px 5px 2px;
+}
+.sidebar-user {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px;
+  border-radius:12px;
+  background:rgba(255,255,255,.035);
+}
+.sidebar-user b { color:#edf2ff; font-size:11px; }
+.sidebar-user small { color:#74819a; font-size:8px; letter-spacing:1px; }
+.doctor-avatar-small {
+  width:34px; height:34px; border-radius:11px;
+  display:grid; place-items:center;
+  color:#fff; font-weight:800; font-size:12px;
+  background:linear-gradient(135deg,#6366f1,#14b8a6);
+}
+.logout-btn {
+  width:100%; margin-top:8px; border:0; background:transparent;
+  color:#7f8ba3; border-radius:10px; padding:9px 10px;
+  text-align:left; cursor:pointer;
+}
+.logout-btn:hover { color:#fff; background:rgba(239,68,68,.09); }
+
+/* Topbar */
+.clinical-main { min-width:0; }
+.clinical-topbar {
+  min-height:88px;
+  height:auto;
+  padding:16px 28px;
+  gap:20px;
+  background:rgba(255,255,255,.82);
+  border-bottom:1px solid rgba(226,232,240,.86);
+  backdrop-filter:blur(20px);
+  position:sticky;
+  top:0;
+  z-index:30;
+}
+.page-context { min-width:175px; }
+.page-context .context-kicker {
+  color:#8997aa; font-size:8px; font-weight:800; letter-spacing:1.5px;
+}
+.page-context h1 {
+  margin:5px 0 0;
+  font-size:22px;
+  line-height:1.1;
+  letter-spacing:-.7px;
+  color:#172b49;
+}
+.milestone-strip {
+  display:flex; gap:4px; padding:4px;
+  border:1px solid #e8edf5;
+  background:#f6f8fc;
+  border-radius:13px;
+}
+.milestone-strip button {
+  border:0; background:transparent; color:#8391a5;
+  padding:7px 9px; border-radius:9px; font-size:9px; cursor:pointer;
+  white-space:nowrap;
+}
+.milestone-strip button span { display:block; font-size:8px; margin-top:2px; opacity:.7; }
+.milestone-strip button.active {
+  color:#3730a3;
+  background:#fff;
+  box-shadow:0 4px 13px rgba(29,41,72,.08);
+}
+.topbar-actions { gap:8px; }
+.clinical-search {
+  height:39px;
+  border:1px solid #e2e8f0;
+  border-radius:11px;
+  background:#fff;
+  box-shadow:0 4px 14px rgba(31,50,78,.035);
+}
+.clinical-search input { border:0!important; outline:0; background:transparent; color:#263a54; }
+.search-btn {
+  border:0!important; border-radius:8px!important;
+  background:#f1f3ff!important; color:#4f46e5!important;
+  font-size:10px!important; padding:7px 10px!important;
+}
+.top-icon-btn,.refresh-btn {
+  min-height:39px;
+  border:1px solid #e4e9f1!important;
+  border-radius:11px!important;
+  background:#fff!important;
+  color:#52657e!important;
+  box-shadow:0 4px 14px rgba(31,50,78,.035);
+}
+.top-icon-btn:hover,.refresh-btn:hover { border-color:#c7d2fe!important; color:#4338ca!important; }
+.system-state { padding:8px 10px; border-radius:10px; background:#ecfdf8; color:#087f70; font-size:9px; font-weight:800; }
+.system-state i { display:inline-block; width:6px; height:6px; margin-right:6px; border-radius:50%; background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.10); }
+
+/* Selected patient */
+.patient-context-bar {
+  margin:14px 28px 0;
+  padding:9px 11px;
+  border:1px solid #e4eaf2;
+  border-radius:14px;
+  background:rgba(255,255,255,.84);
+  box-shadow:0 8px 25px rgba(25,45,75,.05);
+  backdrop-filter:blur(12px);
+}
+.selected-patient-chip .avatar {
+  width:34px; height:34px; border-radius:10px;
+  background:linear-gradient(135deg,#eef2ff,#dff8f4);
+  color:#4f46e5;
+}
+.selected-patient-chip b { font-size:11px; color:#203653; }
+.selected-patient-chip small { color:#8795a8; font-size:8px; }
+.context-actions button {
+  border:1px solid #e2e8f0!important;
+  border-radius:9px!important;
+  background:#fff!important;
+  color:#53667e!important;
+  padding:8px 10px!important;
+  font-size:10px!important;
+}
+.context-actions button:hover { color:#4338ca!important; border-color:#c7d2fe!important; }
+
+/* Page canvas */
+.content { padding:24px 28px 44px; max-width:1600px; margin:0 auto; }
+
+/* Hero */
+.hero {
+  border:1px solid rgba(129,140,248,.16);
+  border-radius:22px;
+  padding:32px 34px;
+  min-height:180px;
+  background:
+    radial-gradient(circle at 82% 15%, rgba(20,184,166,.22), transparent 27%),
+    radial-gradient(circle at 65% 100%, rgba(99,102,241,.28), transparent 30%),
+    linear-gradient(135deg,#18264b,#172044 52%,#123d48);
+  box-shadow:0 20px 55px rgba(28,40,78,.18);
+  overflow:hidden;
+  position:relative;
+}
+.hero:after {
+  content:""; position:absolute; width:260px; height:260px; right:-100px; top:-130px;
+  border:1px solid rgba(255,255,255,.08); border-radius:50%;
+  box-shadow:0 0 0 40px rgba(255,255,255,.025),0 0 0 80px rgba(255,255,255,.018);
+}
+.hero .eyebrow { color:#a5b4fc; }
+.hero h2 { color:#fff; font-size:31px; letter-spacing:-1px; }
+.hero p { color:#b9c6db; max-width:650px; }
+.hero-icon { color:#8b9cf7; opacity:.23; font-size:105px; }
+
+/* Metrics */
+.cards { grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.metric {
+  border:1px solid #e6ebf3;
+  border-radius:16px;
+  padding:17px 18px;
+  background:rgba(255,255,255,.92);
+  box-shadow:0 8px 25px rgba(25,45,75,.045);
+  position:relative;
+  overflow:hidden;
+}
+.metric:before {
+  content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(#6366f1,#14b8a6);
+}
+.metric span { color:#8794a7; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:1px; }
+.metric b { color:#182d49; font-size:28px; letter-spacing:-1px; }
+.metric small { color:#9aa6b7; font-size:9px; }
+
+/* Panels / cards */
+.panel {
+  border:1px solid #e5eaf2;
+  border-radius:17px;
+  background:rgba(255,255,255,.94);
+  box-shadow:var(--ms-shadow);
+}
+.panel:hover { box-shadow:0 18px 45px rgba(25,45,75,.075); }
+.panel h3 { color:#1b304c; letter-spacing:-.3px; }
+.panel p { color:#78899d; line-height:1.65; }
+.command-grid,.grid2 { gap:14px; }
+.command-panel { padding:18px; }
+.panel-head { gap:12px; }
+.panel-head h3 { font-size:15px; }
+.panel-head p { font-size:10px; }
+.command-status,.entry-status {
+  padding:6px 9px; border-radius:999px;
+  background:#f1f3ff; color:#5148c9; font-size:8px; font-weight:800;
+}
+.patient-quick {
+  border:1px solid transparent!important;
+  border-bottom:1px solid #eef1f5!important;
+  padding:11px 4px!important;
+  transition:.18s;
+}
+.patient-quick:hover { background:#f8f9ff; border-radius:10px; transform:translateX(2px); }
+.patient-quick .avatar { width:34px; height:34px; border-radius:10px; background:#eef2ff; color:#4f46e5; }
+.orchestration > div {
+  border:1px solid #e9edf4; border-radius:12px; background:#fafbfe;
+  padding:13px;
+}
+.orchestration b { color:#293d59; }
+
+/* Tables */
+.table,.table-wrap { border-radius:15px; }
+table { border-collapse:separate; border-spacing:0; }
+th {
+  background:#f7f8fc;
+  color:#7d8ba0;
+  font-size:8px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  font-weight:800;
+}
+th:first-child { border-radius:10px 0 0 10px; }
+th:last-child { border-radius:0 10px 10px 0; }
+td { color:#4c6078; border-bottom:1px solid #edf0f5; }
+tbody tr { transition:.16s; }
+tbody tr:hover { background:#fafbff; }
+.row-open {
+  border:1px solid #dfe5f0!important; background:#fff!important; color:#4f46e5!important;
+  border-radius:8px!important; font-size:9px!important;
+}
+.severity { font-weight:800; letter-spacing:.3px; }
+
+/* Forms */
+input,select,textarea {
+  border-color:#dfe6ef!important;
+  border-radius:10px!important;
+  background:#fff!important;
+  color:#263b56!important;
+  transition:border-color .18s, box-shadow .18s, background .18s;
+}
+input:focus,select:focus,textarea:focus {
+  border-color:#818cf8!important;
+  box-shadow:0 0 0 3px rgba(99,102,241,.11)!important;
+}
+button { transition:transform .16s, box-shadow .16s, border-color .16s, background .16s; }
+button:not(:disabled):hover { transform:translateY(-1px); }
+button:disabled { opacity:.55; cursor:not-allowed; }
+.primary {
+  background:linear-gradient(135deg,#5b54e8,#4f46e5)!important;
+  box-shadow:0 8px 20px rgba(79,70,229,.18);
+}
+.primary:hover:not(:disabled) { box-shadow:0 11px 26px rgba(79,70,229,.25); }
+
+/* Modern analytics */
+.style4-analytics-grid { gap:14px!important; }
+.analytics-panel,.architecture-panel,.registry-panel { border-radius:17px!important; }
+.bar-track { background:#edf0f6!important; }
+.bar-track span { background:linear-gradient(90deg,#6366f1,#14b8a6)!important; }
+.alert-track span { background:linear-gradient(90deg,#f59e0b,#ef4444)!important; }
+.care-track span { background:linear-gradient(90deg,#14b8a6,#3b82f6)!important; }
+.workflow-figure { background:linear-gradient(180deg,#fbfcff,#f6f8fc)!important; border:1px solid #e9edf4; border-radius:14px; }
+
+/* Modals */
+.modal-backdrop {
+  background:rgba(10,18,34,.56)!important;
+  backdrop-filter:blur(8px);
+}
+.care-modal,.patient-modal {
+  border:1px solid rgba(255,255,255,.55)!important;
+  border-radius:22px!important;
+  box-shadow:0 30px 100px rgba(4,13,32,.30)!important;
+}
+.modal-head { border-bottom:1px solid #edf0f5!important; }
+.close-btn {
+  width:36px!important; height:36px!important; border-radius:11px!important;
+  background:#f4f6fa!important; color:#64748b!important;
+}
+
+/* Loading system */
+.app-loading-overlay {
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  background:rgba(244,247,251,.56);
+  backdrop-filter:blur(5px);
+  animation:msFadeIn .16s ease-out;
+}
+.app-loading-overlay .loading-copy {
+  min-width:190px;
+  padding:13px 16px;
+  border:1px solid rgba(255,255,255,.8);
+  border-radius:13px;
+  background:rgba(255,255,255,.92);
+  box-shadow:0 18px 55px rgba(20,43,76,.13);
+}
+.loading-copy b { display:block; color:#233954; font-size:11px; }
+.loading-copy small { color:#8a98aa; font-size:9px; }
+.loading-orb {
+  width:42px; height:42px; border-radius:50%;
+  display:grid; place-items:center;
+  background:conic-gradient(#6366f1,#14b8a6,#6366f1);
+  animation:msSpin .9s linear infinite;
+  box-shadow:0 10px 28px rgba(79,70,229,.18);
+}
+.loading-orb span {
+  width:30px; height:30px; border-radius:50%; background:#fff;
+}
+@keyframes msSpin { to { transform:rotate(360deg); } }
+@keyframes msFadeIn { from { opacity:0; } to { opacity:1; } }
+
+.mobile-menu-btn,.mobile-backdrop { display:none; }
+
+/* Responsive */
+@media (max-width:1200px) {
+  .clinical-topbar { flex-wrap:wrap; }
+  .page-context { flex:1; }
+  .milestone-strip { order:3; width:100%; justify-content:center; }
+  .topbar-actions { margin-left:auto; }
+  .cards { grid-template-columns:repeat(3,1fr); }
+}
+@media (max-width:850px) {
+  .clinical-sidebar {
+    position:fixed; inset:0 auto 0 0; height:100vh;
+    transform:translateX(-105%); transition:transform .24s ease;
+    z-index:1001;
+  }
+  .clinical-sidebar.mobile-open { transform:translateX(0); }
+  .mobile-menu-btn {
+    display:grid; place-items:center; flex:0 0 38px; width:38px; height:38px;
+    border:1px solid #e3e8f1; border-radius:10px; background:#fff; color:#45566d;
+  }
+  .mobile-backdrop {
+    display:block; position:fixed; inset:0; z-index:1000;
+    background:rgba(8,15,29,.42); backdrop-filter:blur(2px);
+  }
+  .clinical-topbar { padding:12px 16px; }
+  .topbar-actions { width:100%; }
+  .clinical-search { flex:1; }
+  .system-state { display:none; }
+  .patient-context-bar,.content { margin-left:16px; margin-right:16px; }
+  .content { padding:18px 0 35px; }
+  .cards { grid-template-columns:repeat(2,1fr); }
+  .grid2,.command-grid,.style4-analytics-grid { grid-template-columns:1fr!important; }
+}
+@media (max-width:560px) {
+  .page-context h1 { font-size:18px; }
+  .page-context .context-kicker { display:none; }
+  .milestone-strip { overflow:auto; justify-content:flex-start; }
+  .milestone-strip button { flex:0 0 auto; }
+  .topbar-actions { flex-wrap:wrap; }
+  .clinical-search { min-width:100%; }
+  .refresh-btn { flex:1; }
+  .cards { grid-template-columns:1fr 1fr; }
+  .hero { padding:24px; }
+  .hero h2 { font-size:25px; }
+  .hero-icon { display:none; }
+  .patient-context-bar { flex-direction:column; align-items:stretch!important; gap:8px; }
+  .context-actions { flex-wrap:wrap; }
+  .context-actions button { flex:1; }
+}
+
+/* ===================== MEDISPHERE 2026 DARK SYSTEM ===================== */
+.clinical-app{--bg:#070a13;--surface:#0d1220;--surface2:#111827;--line:#253047;--text:#edf4ff;--muted:#91a0b8;--violet:#8b5cf6;--cyan:#22d3ee;--mint:#2dd4bf;--lime:#a3e635;--rose:#fb7185;--amber:#fbbf24;--shadow:0 22px 70px rgba(0,0,0,.36);background:radial-gradient(circle at 72% -10%,rgba(139,92,246,.16),transparent 32%),radial-gradient(circle at 20% 10%,rgba(34,211,238,.08),transparent 30%),var(--bg)!important;color:var(--text)!important;min-height:100vh}
+.clinical-app *{box-sizing:border-box}.clinical-sidebar{background:linear-gradient(180deg,#0a0e19,#080b13)!important;border-right:1px solid #202a3d!important;box-shadow:18px 0 60px rgba(0,0,0,.22)!important}.clinical-logo{border-bottom:1px solid #1e293b!important}.clinical-logo .logo-mark{background:linear-gradient(135deg,var(--violet),var(--cyan))!important;box-shadow:0 0 28px rgba(139,92,246,.35)!important;color:white!important}.clinical-logo b{color:#fff!important}.clinical-logo small,.sidebar-label,.sidebar-user small{color:#71809a!important}.nav-item{color:#8795ad!important;background:transparent!important;border:1px solid transparent!important;border-radius:14px!important;margin:3px 10px!important;width:calc(100% - 20px)!important}.nav-item:hover{background:#121a2b!important;color:#f4f7ff!important;border-color:#24304a!important}.nav-item.active{background:linear-gradient(90deg,rgba(139,92,246,.20),rgba(34,211,238,.06))!important;color:#fff!important;border-color:rgba(139,92,246,.28)!important;box-shadow:inset 3px 0 0 var(--violet)!important}.nav-item.active .nav-icon{color:#a78bfa!important}.sidebar-footer{border-top:1px solid #1e293b!important}.sidebar-user{background:#0d1422!important;border:1px solid #202b40!important;border-radius:15px!important}.doctor-avatar-small{background:linear-gradient(135deg,var(--violet),var(--cyan))!important}.sidebar-user b{color:#eaf1ff!important}.logout-btn{color:#91a0b8!important;background:#101725!important;border:1px solid #253047!important}.clinical-main{background:transparent!important}.clinical-topbar{background:rgba(7,10,19,.78)!important;border-bottom:1px solid #1c2639!important;backdrop-filter:blur(22px)!important;position:sticky!important;top:0!important;z-index:100!important}.page-context .context-kicker{color:#667892!important}.page-context h1{color:#f5f8ff!important}.milestone-strip button{background:#0d1421!important;border:1px solid #202b40!important;color:#8190a9!important}.milestone-strip button.active{background:linear-gradient(135deg,rgba(139,92,246,.18),rgba(34,211,238,.10))!important;border-color:rgba(139,92,246,.35)!important;color:#fff!important}.topbar-actions .clinical-search{background:#0d1421!important;border-color:#243149!important}.clinical-search input{color:#f4f7ff!important}.clinical-search input::placeholder{color:#65748c!important}.search-btn,.refresh-btn,.top-icon-btn{background:#101827!important;color:#b8c4d8!important;border-color:#26334a!important}.system-state{color:#8fa0ba!important}.system-state i{background:var(--mint)!important;box-shadow:0 0 14px rgba(45,212,191,.7)!important}.patient-context-bar{background:rgba(13,18,32,.92)!important;border:1px solid #243049!important;box-shadow:var(--shadow)!important}.selected-patient-chip .avatar{background:linear-gradient(135deg,var(--violet),var(--cyan))!important}.selected-patient-chip b{color:#fff!important}.selected-patient-chip small{color:#7f90aa!important}.context-actions button{background:#111a2b!important;border-color:#293650!important;color:#c9d4e7!important}.content{color:var(--text)!important}.hero,.section-hero{background:radial-gradient(circle at 85% 20%,rgba(34,211,238,.10),transparent 28%),radial-gradient(circle at 30% 10%,rgba(139,92,246,.13),transparent 36%),linear-gradient(135deg,#0e1524,#0b101c)!important;border:1px solid #26334b!important;box-shadow:var(--shadow)!important}.hero h2,.section-hero h2{color:#fff!important}.hero p,.section-hero p{color:#93a3bb!important}.eyebrow,.card-kicker{color:#a78bfa!important;letter-spacing:.16em!important}.hero-icon{background:linear-gradient(135deg,rgba(139,92,246,.24),rgba(34,211,238,.14))!important;border:1px solid rgba(139,92,246,.3)!important;color:#c4b5fd!important}.metric,.panel,.table,.command-panel{background:linear-gradient(180deg,rgba(17,24,39,.94),rgba(11,17,29,.96))!important;border:1px solid #243149!important;box-shadow:0 18px 55px rgba(0,0,0,.23)!important;color:#e9f0fc!important}.metric span,.metric small,.panel p,.panel small{color:#8292aa!important}.metric b,.panel-head h3,.panel h3,.panel h4{color:#f5f8ff!important}.panel-head button,.panel button,.table button{background:#111a2b!important;color:#bfcbe0!important;border:1px solid #2a3851!important}.panel button.primary,.primary{background:linear-gradient(135deg,#7c3aed,#06b6d4)!important;border-color:transparent!important;color:#fff!important;box-shadow:0 12px 28px rgba(124,58,237,.25)!important}.metric.warn{background:linear-gradient(180deg,rgba(120,53,15,.16),rgba(11,17,29,.96))!important;border-color:rgba(251,191,36,.22)!important}input,select,textarea{background:#0a111e!important;color:#edf4ff!important;border:1px solid #2a3851!important;border-radius:11px!important}input:focus,select:focus,textarea:focus{outline:none!important;border-color:var(--violet)!important;box-shadow:0 0 0 3px rgba(139,92,246,.12)!important}.table th{color:#70819b!important;background:#0b1220!important;border-bottom:1px solid #26334a!important}.table td{color:#cbd6e8!important;border-bottom:1px solid #1e293b!important}.pill{background:#151f32!important;color:#9fb0c8!important;border:1px solid #2a3851!important}.pill.success{background:rgba(45,212,191,.10)!important;color:#5eead4!important;border-color:rgba(45,212,191,.25)!important}.severity{background:rgba(251,191,36,.10)!important;color:#fbbf24!important}.severity.critical{background:rgba(251,113,133,.12)!important;color:#fb7185!important}.mini-list>div,.patient-quick,.orchestration,.recent-vital-row,.data-list>div,.rx-item,.notification-card,.recommendation-box,.interaction-result,.assistant-answer{background:#0b1321!important;border-color:#243149!important;color:#dbe5f4!important}.patient-quick b,.rx-item b,.data-list b,.notification-card b{color:#f5f8ff!important}.patient-quick small,.rx-item small,.data-list small,.notification-card small{color:#7f90a8!important}.modal-backdrop{background:rgba(2,5,12,.78)!important;backdrop-filter:blur(12px)!important}.app-loading-overlay{background:rgba(2,5,12,.24)!important;backdrop-filter:none!important}.appointment-modal,.care-modal,.patient-modal{background:#0d1422!important;border:1px solid #2b3953!important;box-shadow:0 35px 100px rgba(0,0,0,.55)!important;color:#edf4ff!important}.modal-head{border-bottom:1px solid #243149!important}.close-btn{background:#121b2b!important;color:#aebbd0!important;border-color:#293750!important}.app-loading-overlay{z-index:9999!important}.loading-orb{background:conic-gradient(from 0deg,var(--violet),var(--cyan),var(--mint),var(--violet))!important;box-shadow:0 0 55px rgba(139,92,246,.25)!important}.loading-copy{background:rgba(13,20,34,.96)!important;border-color:#2b3953!important;box-shadow:0 24px 70px rgba(0,0,0,.42)!important}.loading-copy b{color:#f8fbff!important}.loading-copy small{color:#9aabc2!important}
+.neon-hero{overflow:hidden;position:relative}.hero-orbit{width:118px;height:118px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(139,92,246,.32);background:radial-gradient(circle,rgba(139,92,246,.18),rgba(34,211,238,.04) 60%,transparent 61%);box-shadow:0 0 55px rgba(139,92,246,.16)}.hero-orbit span{font-size:28px;font-weight:900;color:#d8ccff}.hero-orbit i,.hero-orbit b{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 18px var(--cyan)}.hero-orbit i{transform:translate(50px,-22px)}.hero-orbit b{transform:translate(-40px,38px);background:var(--lime);box-shadow:0 0 18px var(--lime)}.hub-toolbar{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:18px}.hub-patient-select{display:flex;flex-direction:column;gap:8px;min-width:320px;color:#93a3bb}.hub-actions{display:flex;gap:9px;flex-wrap:wrap}.hub-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,.9fr);gap:18px;margin-bottom:18px}.hub-form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.hub-form-grid.compact{grid-template-columns:repeat(4,1fr);margin-bottom:12px}.hub-form-grid label,.safety-panel>label{display:flex;flex-direction:column;gap:7px;color:#a9b7cb;font-size:12px;font-weight:700}.full-field{grid-column:1/-1}.ai-live{color:#5eead4;font-size:10px;font-weight:800;letter-spacing:.1em}.assistant-answer{margin-top:15px;padding:15px;border:1px solid #2a3851;border-radius:14px}.assistant-answer p{color:#c4d0e2!important;line-height:1.65}.assistant-answer small{display:block;margin-top:10px;color:#687b96!important}.answer-chips{display:flex;gap:7px;flex-wrap:wrap}.answer-chips span{font-size:11px;padding:6px 9px;border-radius:999px;background:rgba(139,92,246,.10);color:#c4b5fd;border:1px solid rgba(139,92,246,.22)}.signal-row{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #1e293b}.signal-row span{color:#7f90aa}.signal-row b{color:#f5f8ff}.risk-inline{display:flex;align-items:center;justify-content:space-between;margin-top:15px;padding:12px;border-radius:13px;background:linear-gradient(90deg,rgba(139,92,246,.12),rgba(34,211,238,.05));border:1px solid rgba(139,92,246,.22)}.risk-inline strong{color:#fbbf24}.recommendation-box{margin-top:15px;border:1px solid #28364f;border-radius:14px;overflow:hidden}.rec-head{display:flex;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #253149}.rec-head small{color:#fbbf24!important}.rec-item{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid #1d293d}.rec-item:last-child{border-bottom:0}.rec-item small{display:block}.rec-item span{font-size:11px;color:#6f8098}.warn-text{color:#fbbf24!important}.rx-list,.data-list{margin-top:15px;display:grid;gap:8px}.rx-item,.data-list>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid #243149;border-radius:12px}.rx-item button{padding:7px 9px!important;font-size:11px!important}.safety-orb{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:rgba(45,212,191,.10);color:#5eead4;border:1px solid rgba(45,212,191,.25)}.full-btn{width:100%;margin:12px 0}.interaction-result{margin-top:12px;padding:14px;border:1px solid rgba(45,212,191,.22);border-radius:13px}.interaction-result.danger{border-color:rgba(251,113,133,.35);background:rgba(127,29,29,.12)!important}.interaction-result b{color:#5eead4}.interaction-result.danger b{color:#fb7185}.interaction-result span{display:block;margin-top:6px;color:#fbbf24;font-size:11px}.notification-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.notification-card{display:flex;gap:10px;align-items:flex-start;padding:13px;border:1px solid #243149;border-radius:13px}.notification-card.unread{border-color:rgba(139,92,246,.30);box-shadow:inset 2px 0 var(--violet)}.notification-dot{width:8px;height:8px;border-radius:50%;background:#64748b;margin-top:5px;flex:0 0 auto}.notification-card.unread .notification-dot{background:var(--cyan);box-shadow:0 0 12px rgba(34,211,238,.7)}.notification-card p{margin:4px 0;color:#91a0b8!important;font-size:12px;line-height:1.5}.notification-card button{margin-left:auto!important;white-space:nowrap}@media(max-width:1050px){.hub-grid{grid-template-columns:1fr}.hub-form-grid,.hub-form-grid.compact{grid-template-columns:repeat(2,1fr)}.notification-grid{grid-template-columns:1fr}}@media(max-width:700px){.hub-toolbar{align-items:stretch;flex-direction:column}.hub-patient-select{min-width:0}.hub-form-grid,.hub-form-grid.compact{grid-template-columns:1fr}.full-field{grid-column:auto}.notification-grid{grid-template-columns:1fr}.hero-orbit{display:none}}
+
+/* ============================================================
+   MEDISPHERE — FINAL READABILITY / DARK SURFACE PATCH
+   Fixes the old light Style-4 selectors overriding the dark theme.
+   UI/CSS only — no API or component logic changes.
+   ============================================================ */
+
+.clinical-app,
+.clinical-app .clinical-main,
+.clinical-app .content {
+  color: #edf4ff !important;
+}
+
+/* Every major content surface */
+.clinical-app .panel,
+.clinical-app .metric,
+.clinical-app .table,
+.clinical-app .command-panel,
+.clinical-app .care-card,
+.clinical-app .care-summary-card,
+.clinical-app .care-toolbar,
+.clinical-app .registry-panel,
+.clinical-app .analytics-panel,
+.clinical-app .architecture-panel,
+.clinical-app .schedule-panel,
+.clinical-app .vital-entry-card,
+.clinical-app .vital-guide-card,
+.clinical-app .recent-vitals-card,
+.clinical-app .monitor-alert,
+.clinical-app .twin-panel,
+.clinical-app .qr-panel,
+.clinical-app .ai-assistant-panel,
+.clinical-app .risk-command-panel,
+.clinical-app .pharmacy-metrics,
+.clinical-app .notification-panel,
+.clinical-app .safety-panel {
+  background: linear-gradient(180deg, #111827 0%, #0b111d 100%) !important;
+  color: #edf4ff !important;
+  border-color: #26344d !important;
+  box-shadow: 0 18px 55px rgba(0,0,0,.22) !important;
+}
+
+/* Patient / appointment / pharmacy / alert tables */
+.clinical-app .table-wrap,
+.clinical-app .table-wrap table,
+.clinical-app .style4-table,
+.clinical-app .panel.table,
+.clinical-app .panel.table table {
+  background: #0b111d !important;
+  color: #edf4ff !important;
+  border-color: #26344d !important;
+}
+
+.clinical-app table {
+  background: #0b111d !important;
+  color: #dbe5f4 !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.clinical-app table thead,
+.clinical-app table thead tr,
+.clinical-app .style4-table thead,
+.clinical-app .style4-table thead tr {
+  background: #0d1626 !important;
+}
+
+.clinical-app table th,
+.clinical-app .style4-table th,
+.clinical-app .table table th {
+  background: #0d1626 !important;
+  color: #91a4be !important;
+  border-bottom: 1px solid #2a3851 !important;
+  font-weight: 800 !important;
+}
+
+.clinical-app table td,
+.clinical-app .style4-table td,
+.clinical-app .table table td {
+  background: #0b111d !important;
+  color: #d5dfed !important;
+  border-bottom: 1px solid #202d42 !important;
+}
+
+.clinical-app table tbody tr,
+.clinical-app .style4-table tbody tr {
+  background: #0b111d !important;
+}
+
+.clinical-app table tbody tr:hover,
+.clinical-app .style4-table tbody tr:hover {
+  background: #111c2e !important;
+}
+
+/* Strong readable table text */
+.clinical-app table td b,
+.clinical-app .style4-table td b,
+.clinical-app .table-patient b,
+.clinical-app .table-patient small,
+.clinical-app .table-patient code {
+  color: #f3f7ff !important;
+}
+
+.clinical-app table td small,
+.clinical-app table td span,
+.clinical-app .style4-table td small {
+  color: #a8b8cc !important;
+}
+
+.clinical-app .style4-table code {
+  background: #151f32 !important;
+  color: #b9c8dc !important;
+}
+
+/* Buttons inside tables */
+.clinical-app .table button,
+.clinical-app .table-link,
+.clinical-app .row-open {
+  background: #111b2d !important;
+  color: #dce7f5 !important;
+  border: 1px solid #30405a !important;
+}
+
+.clinical-app .table button:hover,
+.clinical-app .table-link:hover,
+.clinical-app .row-open:hover {
+  background: #17243a !important;
+  color: #ffffff !important;
+  border-color: #526783 !important;
+}
+
+/* Patient/registry table status pills */
+.clinical-app .table-status,
+.clinical-app .pill {
+  background: rgba(45,212,191,.10) !important;
+  color: #5eead4 !important;
+  border: 1px solid rgba(45,212,191,.25) !important;
+}
+
+/* Analytics / workflow surfaces */
+.clinical-app .workflow-figure {
+  background: linear-gradient(145deg, #101827, #0b1321) !important;
+  border-color: #26344d !important;
+}
+
+.clinical-app .workflow-figure text {
+  fill: #aebed1 !important;
+}
+
+.clinical-app .workflow-caption,
+.clinical-app .bar-label span,
+.clinical-app .bar-label b {
+  color: #aebed1 !important;
+}
+
+.clinical-app .bar-track {
+  background: #1b2638 !important;
+}
+
+/* Forms — readable text and placeholders everywhere */
+.clinical-app input,
+.clinical-app select,
+.clinical-app textarea {
+  background: #0a111e !important;
+  color: #edf4ff !important;
+  border-color: #2d3b55 !important;
+  caret-color: #22d3ee !important;
+}
+
+.clinical-app input::placeholder,
+.clinical-app textarea::placeholder {
+  color: #71829b !important;
+  opacity: 1 !important;
+}
+
+.clinical-app option {
+  background: #0d1422 !important;
+  color: #edf4ff !important;
+}
+
+.clinical-app label,
+.clinical-app .field,
+.clinical-app .hub-form-grid label,
+.clinical-app .safety-panel > label {
+  color: #c5d1e1 !important;
+}
+
+/* Headings and descriptions inside cards */
+.clinical-app .panel h2,
+.clinical-app .panel h3,
+.clinical-app .panel h4,
+.clinical-app .metric h3,
+.clinical-app .care-card h3,
+.clinical-app .care-card h4,
+.clinical-app .schedule-panel h3,
+.clinical-app .registry-panel h3 {
+  color: #f5f8ff !important;
+}
+
+.clinical-app .panel p,
+.clinical-app .panel small,
+.clinical-app .care-card p,
+.clinical-app .care-card small,
+.clinical-app .schedule-panel p,
+.clinical-app .registry-panel p {
+  color: #93a3bb !important;
+}
+
+/* Data lists, medication rows, notifications and alerts */
+.clinical-app .data-list > div,
+.clinical-app .mini-list > div,
+.clinical-app .recent-vital-row,
+.clinical-app .rx-item,
+.clinical-app .notification-card,
+.clinical-app .recommendation-box,
+.clinical-app .interaction-result,
+.clinical-app .assistant-answer,
+.clinical-app .patient-quick,
+.clinical-app .orchestration {
+  background: #0b1321 !important;
+  color: #dbe5f4 !important;
+  border-color: #26344d !important;
+}
+
+.clinical-app .data-list b,
+.clinical-app .rx-item b,
+.clinical-app .notification-card b,
+.clinical-app .patient-quick b {
+  color: #f5f8ff !important;
+}
+
+.clinical-app .data-list small,
+.clinical-app .rx-item small,
+.clinical-app .notification-card small,
+.clinical-app .patient-quick small {
+  color: #8fa1b9 !important;
+}
+
+/* Clinical alerts */
+.clinical-app .alert-track,
+.clinical-app .monitor-alert {
+  color: #dbe5f4 !important;
+}
+
+/* Remove the old white Style-4 surfaces that were making text disappear */
+.clinical-app .style4-table,
+.clinical-app .style4-table tbody tr,
+.clinical-app .style4-table tbody tr:hover,
+.clinical-app .style4-table td,
+.clinical-app .style4-table th,
+.clinical-app .row-open,
+.clinical-app .hero-stat {
+  background-color: #0b111d !important;
+}
+
+.clinical-app .hero-stat {
+  color: #dbe5f4 !important;
+  border-color: #26344d !important;
+}
+
+.clinical-app .hero-stat span,
+.clinical-app .hero-stat b {
+  color: #dbe5f4 !important;
+}
+
+
+`]
 })
 export class ShellComponent {
 
@@ -2873,9 +4852,11 @@ export class ShellComponent {
   // =====================================================
 
   tab = 'dashboard';
-  today = new Date();
+  isLoading = false;
+  sidebarOpen = false;
 
   search = '';
+  globalSearch = '';
 
 
   user: any =
@@ -2888,7 +4869,8 @@ export class ShellComponent {
     patients: 0,
     appointments: 0,
     activeAlerts: 0,
-    medicines: 0
+    medicines: 0,
+    carePlans: 0
   };
 
 
@@ -2899,12 +4881,6 @@ export class ShellComponent {
   alerts: any[] = [];
 
   medicines: any[] = [];
-
-  // Dashboard preview data (kept separate so the dashboard never changes tabs while loading)
-  dashboardPatientData: any = null;
-  dashboardLatestVital: any = null;
-  dashboardRiskSnapshot: any = null;
-  dashboardCarePlan: any = null;
 
 
   // =====================================================
@@ -2922,39 +4898,7 @@ export class ShellComponent {
 
 
   risk: any = null;
-  riskHistory: any[] = [];
-  federated: any = null;
-  aiPatientId = '';
 
-  // =====================================================
-  // MILESTONE 3 · REAL-TIME MONITORING
-  // =====================================================
-  monitoringPatientId = '';
-  monitoring: any = null;
-  monitoringAlerts: any[] = [];
-  monitoringRunning = false;
-  monitoringCycle = 0;
-  monitoringAttention = false;
-  private monitoringTimer: any = null;
-  private liveVitalSeed: any = null;
-  private monitoringErrorShown = false;
-  monitoringUpdatedAt: Date | null = null;
-
-  escalationOpen = false;
-  escalationAlert: any = null;
-  escalationTeam = 'Rapid Response Team (Cardiac/Code Blue)';
-
-
-  // =====================================================
-  // MILESTONE 4 · CARE PLAN & TREATMENT
-  // =====================================================
-  carePatientId = '';
-  carePatient: any = null;
-  careMonitoring: any = null;
-  carePlans: any[] = [];
-  selectedCarePlan: any = null;
-  careBusy = false;
-  careMessage = '';
 
   // =====================================================
   // FHIR / SMART
@@ -2969,66 +4913,188 @@ export class ShellComponent {
   // VITAL
   // =====================================================
 
-  vital: any = {
-    source: 'WEARABLE'
-  };
+  vital: any = { source: 'MANUAL', patientId: '' };
+  vitalSaving = false;
+  recentVitalHistory: any[] = [];
 
-  refreshing = false;
-  refreshPending = 0;
-
-  patientFormOpen = false;
+  // ADD PATIENT FORM
+  showPatientForm = false;
   savingPatient = false;
-  patientForm: any = {};
+  newPatientForm: any = this.createEmptyPatientForm();
 
-  appointmentFormOpen = false;
+  // =====================================================
+  // M3 REAL-TIME MONITORING
+  // =====================================================
+  monitorOverview: any = { patientsMonitored: 0, criticalAlerts: 0, warningAlerts: 0, patientSnapshots: [] };
+  monitorPatient: any = null;
+  monitorPatientId = '';
+  monitoringLive = false;
+  monitoringUpdated: any = null;
+  monitoringTimer: any = null;
+  trendKey = 'heartRate';
+  trendKeys = ['heartRate', 'oxygen', 'systolic', 'glucose', 'temperature'];
+
+  // =====================================================
+  // APPOINTMENT SCHEDULER
+  // =====================================================
+  appointmentDepartments = ['Cardiology','Neurology','General Medicine','Orthopedics','Dermatology','Pediatrics','Gynecology','Endocrinology'];
+  appointmentDepartment = 'Cardiology';
+  appointmentDoctor: any = null;
+  appointmentDoctors: any[] = [
+    {id:'doc-card-1',name:'Dr. Ananya Mehta',department:'Cardiology',specialty:'Interventional Cardiology',experience:'12 yrs experience',room:'Cardiac Wing · Room 201',days:['Monday','Wednesday','Friday'],hours:'09:00 AM – 01:00 PM',slots:['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30']},
+    {id:'doc-card-2',name:'Dr. Rohan Kapoor',department:'Cardiology',specialty:'Clinical Cardiology',experience:'9 yrs experience',room:'Cardiac Wing · Room 204',days:['Tuesday','Thursday','Saturday'],hours:'02:00 PM – 06:00 PM',slots:['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30']},
+    {id:'doc-neuro-1',name:'Dr. Neha Verma',department:'Neurology',specialty:'Neurology & Stroke Care',experience:'11 yrs experience',room:'Neuro Wing · Room 301',days:['Monday','Tuesday','Thursday'],hours:'10:00 AM – 02:00 PM',slots:['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30']},
+    {id:'doc-neuro-2',name:'Dr. Arvind Rao',department:'Neurology',specialty:'Neurophysiology',experience:'8 yrs experience',room:'Neuro Wing · Room 305',days:['Wednesday','Friday','Saturday'],hours:'03:00 PM – 07:00 PM',slots:['15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30']},
+    {id:'doc-general-1',name:'Dr. Arjun Sharma',department:'General Medicine',specialty:'Internal Medicine',experience:'10 yrs experience',room:'Main OPD · Room 101',days:['Monday','Tuesday','Wednesday','Thursday','Friday'],hours:'09:00 AM – 01:00 PM',slots:['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30']},
+    {id:'doc-general-2',name:'Dr. Priya Nair',department:'General Medicine',specialty:'Family Medicine',experience:'7 yrs experience',room:'Main OPD · Room 105',days:['Monday','Wednesday','Friday','Saturday'],hours:'02:00 PM – 06:00 PM',slots:['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30']},
+    {id:'doc-ortho-1',name:'Dr. Vivek Malhotra',department:'Orthopedics',specialty:'Joint Replacement & Sports Injury',experience:'14 yrs experience',room:'Ortho Wing · Room 401',days:['Monday','Wednesday','Friday'],hours:'10:00 AM – 02:00 PM',slots:['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30']},
+    {id:'doc-ortho-2',name:'Dr. Kavya Singh',department:'Orthopedics',specialty:'Spine & Rehabilitation',experience:'8 yrs experience',room:'Ortho Wing · Room 405',days:['Tuesday','Thursday','Saturday'],hours:'03:00 PM – 07:00 PM',slots:['15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30']},
+    {id:'doc-derm-1',name:'Dr. Isha Gupta',department:'Dermatology',specialty:'Clinical Dermatology',experience:'9 yrs experience',room:'Skin Center · Room 501',days:['Tuesday','Thursday','Friday'],hours:'10:00 AM – 02:00 PM',slots:['10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30']},
+    {id:'doc-derm-2',name:'Dr. Rahul Bhatia',department:'Dermatology',specialty:'Aesthetic & Laser Dermatology',experience:'10 yrs experience',room:'Skin Center · Room 504',days:['Monday','Wednesday','Saturday'],hours:'03:00 PM – 07:00 PM',slots:['15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30']},
+    {id:'doc-ped-1',name:'Dr. Meera Joshi',department:'Pediatrics',specialty:'Child & Adolescent Care',experience:'13 yrs experience',room:'Children Wing · Room 601',days:['Monday','Tuesday','Thursday'],hours:'09:00 AM – 01:00 PM',slots:['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30']},
+    {id:'doc-ped-2',name:'Dr. Sameer Khan',department:'Pediatrics',specialty:'Pediatric Allergy & Immunology',experience:'8 yrs experience',room:'Children Wing · Room 604',days:['Wednesday','Friday','Saturday'],hours:'02:00 PM – 06:00 PM',slots:['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30']},
+    {id:'doc-gyn-1',name:'Dr. Ritu Sharma',department:'Gynecology',specialty:'Obstetrics & Gynecology',experience:'15 yrs experience',room:'Women Care · Room 701',days:['Monday','Wednesday','Friday'],hours:'09:00 AM – 01:00 PM',slots:['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30']},
+    {id:'doc-gyn-2',name:'Dr. Pooja Menon',department:'Gynecology',specialty:'Maternal & Reproductive Health',experience:'10 yrs experience',room:'Women Care · Room 704',days:['Tuesday','Thursday','Saturday'],hours:'02:00 PM – 06:00 PM',slots:['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30']},
+    {id:'doc-endo-1',name:'Dr. Nikhil Sethi',department:'Endocrinology',specialty:'Diabetes & Metabolic Medicine',experience:'12 yrs experience',room:'Metabolic Center · Room 801',days:['Monday','Tuesday','Thursday'],hours:'09:00 AM – 01:00 PM',slots:['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30']},
+    {id:'doc-endo-2',name:'Dr. Aditi Rao',department:'Endocrinology',specialty:'Thyroid & Hormonal Disorders',experience:'9 yrs experience',room:'Metabolic Center · Room 805',days:['Wednesday','Friday','Saturday'],hours:'03:00 PM – 07:00 PM',slots:['15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30']}
+  ];
+  availableAppointmentSlots: string[] = [];
+  showAppointmentForm = false;
   savingAppointment = false;
-  appointmentForm: any = {};
-  appointmentDepartments = [
-    { name: 'Cardiology', icon: '♥', description: 'Heart & vascular care' },
-    { name: 'Neurology', icon: '◈', description: 'Brain & nervous system' },
-    { name: 'General Medicine', icon: '✚', description: 'Primary adult care' },
-    { name: 'Orthopedics', icon: '◫', description: 'Bones & joints' },
-    { name: 'Dermatology', icon: '◇', description: 'Skin & hair care' },
-    { name: 'Pediatrics', icon: '●', description: 'Child healthcare' },
-    { name: 'Gynecology', icon: '♀', description: 'Women’s health' },
-    { name: 'Endocrinology', icon: '◉', description: 'Hormone & diabetes care' }
-  ];
-  doctorDirectory: any[] = [
-    { name:'Dr. Arjun Sharma', specialty:'General Medicine', experience:12, slots:['09:00','09:30','10:00','10:30','11:30','12:00','14:00','14:30','15:00','16:00'] },
-    { name:'Dr. Meera Kapoor', specialty:'General Medicine', experience:9, slots:['09:30','10:00','11:00','11:30','13:00','14:00','15:30','16:00','16:30'] },
-    { name:'Dr. Rohan Mehta', specialty:'Cardiology', experience:16, slots:['09:00','09:30','10:30','11:00','12:00','14:30','15:00','16:00'] },
-    { name:'Dr. Ananya Rao', specialty:'Cardiology', experience:11, slots:['10:00','10:30','11:30','12:00','14:00','14:30','15:30','16:30'] },
-    { name:'Dr. Vikram Singh', specialty:'Neurology', experience:14, slots:['09:00','10:00','10:30','11:30','13:30','14:00','15:00','16:00'] },
-    { name:'Dr. Priya Nair', specialty:'Neurology', experience:8, slots:['09:30','10:30','11:00','12:00','14:30','15:00','16:00','16:30'] },
-    { name:'Dr. Karan Malhotra', specialty:'Orthopedics', experience:13, slots:['09:00','09:30','10:30','11:30','12:00','14:00','15:00','15:30'] },
-    { name:'Dr. Neha Verma', specialty:'Orthopedics', experience:7, slots:['10:00','11:00','11:30','13:00','14:00','14:30','16:00','16:30'] },
-    { name:'Dr. Simran Khanna', specialty:'Dermatology', experience:10, slots:['09:30','10:00','11:00','12:00','14:00','15:00','16:00','16:30'] },
-    { name:'Dr. Amit Joshi', specialty:'Dermatology', experience:6, slots:['09:00','10:30','11:30','13:30','14:30','15:30','16:00'] },
-    { name:'Dr. Pooja Iyer', specialty:'Pediatrics', experience:12, slots:['09:00','09:30','10:30','11:00','12:00','14:00','15:00','16:00'] },
-    { name:'Dr. Rahul Bhatia', specialty:'Pediatrics', experience:9, slots:['10:00','10:30','11:30','13:30','14:30','15:30','16:30'] },
-    { name:'Dr. Aisha Khan', specialty:'Gynecology', experience:15, slots:['09:00','10:00','11:00','12:00','14:00','15:00','16:00'] },
-    { name:'Dr. Nidhi Gupta', specialty:'Gynecology', experience:8, slots:['09:30','10:30','11:30','13:30','14:30','15:30','16:30'] },
-    { name:'Dr. Sameer Sethi', specialty:'Endocrinology', experience:13, slots:['09:00','10:00','11:30','12:00','14:00','15:00','16:00'] },
-    { name:'Dr. Kavya Menon', specialty:'Endocrinology', experience:10, slots:['09:30','10:30','11:00','13:30','14:30','15:30','16:30'] }
-  ];
+  todayDate = new Date().toISOString().slice(0,10);
+  appointmentForm: any = {patientId:'',date:this.todayDate,time:'',status:'SCHEDULED',reason:'General consultation'};
 
-  monitorTrendKey = 'heartRate';
-  monitorTrendKeys = ['heartRate','oxygen','systolic','glucose'];
+  // =====================================================
+  // M4 CARE PLAN & TREATMENT
+  // =====================================================
+  carePlanPatientId = '';
+  carePlans: any[] = [];
+  carePlanBusy = false;
+  carePlanFormOpen = false;
+  editingCarePlan: any = null;
+  carePlanForm: any = this.emptyCarePlanForm();
 
+  // M3 demo wearable stream: posts changing readings to the real backend
+  // so the MongoDB history and monitoring graph visibly update.
+  simulationRunning = false;
+  simulationTimer: any = null;
+
+  medicineStockLow(m:any){ return Number(m?.stock||0) <= Number(m?.reorderLevel||20); }
+  lowStockMedicineCount(){ return this.medicines.filter(m => this.medicineStockLow(m)).length; }
+
+  loadClinicalAnalytics(){ this.api.get<any>('/clinical/analytics', false).subscribe({next:x=>this.clinicalAnalytics=x,error:()=>{}}); }
+
+  // =====================================================
+  // ADVANCED CLINICAL HUB
+  // =====================================================
+  clinicalPatientId = '';
+  clinicalData: any = null;
+
+  // Keep the template collection explicitly typed so Angular strict template
+  // checking does not infer the value piped through `slice` as `unknown`.
+  get clinicalLabs(): any[] {
+    return Array.isArray(this.clinicalData?.labs) ? this.clinicalData.labs.slice(0, 6) : [];
+  }
+  clinicalAnalytics: any = {};
+  clinicalNotifications: any[] = [];
+  assistantQuestion = '';
+  assistantAnswer: any = null;
+  assistantBusy = false;
+  recommendationDiagnosis = '';
+  medicineRecommendations: any[] = [];
+  interactionA = '';
+  interactionB = '';
+  interactionResult: any = null;
+  prescriptionForm: any = { patientId:'', medicineName:'', strength:'', dosage:'1 tablet', frequency:'Once daily', timing:'After meal', durationDays:30, diagnosis:'', instructions:'' };
+  prescriptionBusy = false;
+  labForm: any = { patientId:'', testName:'', result:'', unit:'', referenceRange:'' };
+  labBusy = false;
+  documentForm: any = { patientId:'', name:'', documentType:'LAB_REPORT', description:'' };
+  selectedDocumentFile: File | null = null;
+  qrImage = '';
+  qrPayload = '';
+  documentBusy = false;
 
   nav = [
-    { id: 'dashboard', label: 'Dashboard', icon: '⌂' },
-    { id: 'patients', label: 'Patients', icon: '◉' },
-    { id: 'patient360', label: 'Patient 360', icon: '◎' },
-    { id: 'appointments', label: 'Appointments', icon: '▣' },
-    { id: 'aiRisk', label: 'AI Risk Lab', icon: '✦' },
-    { id: 'monitoring', label: 'Live Monitoring', icon: '◌' },
-    { id: 'alerts', label: 'Clinical Alerts', icon: '⚠' },
-    { id: 'carePlans', label: 'Care Plan & Treatment', icon: '✓' },
-    { id: 'pharmacy', label: 'Pharmacy', icon: '▤' },
-    { id: 'fhir', label: 'FHIR / SMART', icon: '⇄' },
-    { id: 'reports', label: 'Reports', icon: '▤' },
-    { id: 'settings', label: 'Settings', icon: '⚙' }
+
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: '⌂'
+    },
+
+    {
+      id: 'patients',
+      label: 'Patients',
+      icon: '◉'
+    },
+
+    {
+      id: 'patient360',
+      label: 'Patient 360',
+      icon: '◎'
+    },
+
+    {
+      id: 'clinical',
+      label: 'Clinical Intelligence',
+      icon: '✧'
+    },
+
+    {
+      id: 'aiRisk',
+      label: 'AI Risk Lab',
+      icon: '✦'
+    },
+
+    {
+      id: 'appointments',
+      label: 'Appointments',
+      icon: '▣'
+    },
+
+    {
+      id: 'vitals',
+      label: 'Vitals & Twin',
+      icon: '♥'
+    },
+
+    {
+      id: 'monitoring',
+      label: 'Live Monitoring',
+      icon: '◌'
+    },
+
+    {
+      id: 'careplans',
+      label: 'Care Plan & Treatment',
+      icon: '✓'
+    },
+
+    {
+      id: 'alerts',
+      label: 'Clinical Alerts',
+      icon: '⚠'
+    },
+
+    {
+      id: 'pharmacy',
+      label: 'Pharmacy',
+      icon: '▤'
+    },
+
+    {
+      id: 'fhir',
+      label: 'FHIR / SMART',
+      icon: '⇄'
+    },
+
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: '⚙'
+    }
+
   ];
 
 
@@ -3052,7 +5118,34 @@ export class ShellComponent {
   constructor() {
 
     this.refresh();
+    this.loadMonitoring();
+    this.monitoringTimer = setInterval(() => this.loadMonitoring(true), 5000);
 
+  }
+
+  navigateTo(id: string) {
+    this.tab = id;
+    this.sidebarOpen = false;
+
+    if (id === 'clinical' && !this.clinicalPatientId) {
+      const patientId = this.selected?.patient?.id || this.patients[0]?.id;
+      if (patientId) this.loadClinicalPatient(patientId);
+    }
+    if (id === 'monitoring') {
+      this.loadMonitoring(true);
+    } else if (id === 'careplans' && this.carePlanPatientId) {
+      this.loadCarePlans();
+    } else if (id === 'alerts') {
+      this.refresh();
+    }
+  }
+
+  toggleSidebar() {
+    this.sidebarOpen = !this.sidebarOpen;
+  }
+
+  closeSidebar() {
+    this.sidebarOpen = false;
   }
 
 
@@ -3074,16 +5167,45 @@ export class ShellComponent {
   // =====================================================
 
   refresh() {
-    this.refreshing = true;
-    this.refreshPending = 5;
-    const done = () => { this.refreshPending--; if (this.refreshPending <= 0) this.refreshing = false; };
 
-    this.api.get<any>('/dashboard').subscribe({next:x=>this.dash=x, error:()=>{done();}, complete:done});
-    this.api.get<any[]>('/patients').subscribe({next:x=>{this.patients=x; if(!this.carePatientId && x.length) this.carePatientId=x[0].id; if(x.length && (!this.dashboardPatientData || this.dashboardPatientData.patient?.id !== x[0].id)) this.loadDashboardPreview(x[0].id); if(this.tab==='carePlans' && this.carePatientId) this.loadCarePlans();}, error:()=>{done();}, complete:done});
-    this.api.get<any[]>('/appointments').subscribe({next:x=>this.appointments=x, error:()=>{done();}, complete:done});
-    this.api.get<any[]>('/alerts').subscribe({next:x=>this.alerts=x, error:()=>{done();}, complete:done});
-    this.api.get<any[]>('/medicines').subscribe({next:x=>this.medicines=x, error:()=>{done();}, complete:done});
+    this.api
+      .get<any>('/dashboard')
+      .subscribe(
+        x => this.dash = x
+      );
+
+
+    this.api
+      .get<any[]>('/patients')
+      .subscribe(
+        x => this.patients = x
+      );
+
+
+    this.api
+      .get<any[]>('/appointments')
+      .subscribe(
+        x => this.appointments = x
+      );
+
+
+    this.api
+      .get<any[]>('/alerts')
+      .subscribe(
+        x => this.alerts = x
+      );
+
+
+    this.api
+      .get<any[]>('/medicines')
+      .subscribe(
+        x => this.medicines = x
+      );
+
+    this.loadClinicalAnalytics();
+
   }
+
 
   // =====================================================
   // PATIENT SEARCH
@@ -3114,51 +5236,6 @@ export class ShellComponent {
 
 
   // =====================================================
-  // DASHBOARD PREVIEW
-  // =====================================================
-
-  loadDashboardPreview(id: string) {
-    if (!id) return;
-    this.api.get<any>('/patients/' + id).subscribe({
-      next: x => {
-        this.dashboardPatientData = x;
-        this.dashboardLatestVital = x?.vitals?.[0] || null;
-        this.dashboardCarePlan = x?.carePlans?.[0] || null;
-      }
-    });
-    this.api.get<any[]>('/ai/risk/' + id + '/history').subscribe({
-      next: history => this.dashboardRiskSnapshot = history?.[0] || null,
-      error: () => this.dashboardRiskSnapshot = null
-    });
-  }
-
-  dashboardAge(dob: string) {
-    if (!dob) return '—';
-    const birth = new Date(dob); const now = new Date();
-    let age = now.getFullYear() - birth.getFullYear();
-    const m = now.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
-    return age;
-  }
-
-  dashboardPatientName(patientId: string) {
-    return this.patients.find(p => p.id === patientId)?.name || 'Patient';
-  }
-
-  dashboardTrendPolyline() {
-    const rows = (this.dashboardPatientData?.vitals || []).slice().reverse();
-    let pts = rows.map((v:any) => Number(v?.heartRate)).filter((v:number) => Number.isFinite(v));
-    if (!pts.length && this.dashboardLatestVital?.heartRate) pts = [Number(this.dashboardLatestVital.heartRate)];
-    if (!pts.length) pts = [78, 82, 79, 84, 81, 85, 82, 86];
-    const width = 840, left = 30, top = 18, height = 175;
-    return pts.slice(-10).map((v: number, i: number, arr: number[]) => {
-      const x = left + (i / Math.max(arr.length - 1, 1)) * width;
-      const y = top + (1 - Math.max(50, Math.min(150, v) - 50) / 100) * height;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-  }
-
-  // =====================================================
   // SELECT PATIENT
   // =====================================================
 
@@ -3173,14 +5250,6 @@ export class ShellComponent {
         x => {
 
           this.selected = x;
-          this.dashboardPatientData = x;
-          this.dashboardLatestVital = x?.vitals?.[0] || null;
-          this.dashboardCarePlan = x?.carePlans?.[0] || null;
-
-          this.api.get<any[]>('/ai/risk/' + p.id + '/history').subscribe({
-            next: history => this.dashboardRiskSnapshot = history?.[0] || null,
-            error: () => this.dashboardRiskSnapshot = null
-          });
 
           this.twin = null;
 
@@ -3213,7 +5282,11 @@ export class ShellComponent {
 
 
           this.tab = 'patient360';
-
+          this.clinicalPatientId = p.id;
+          this.prescriptionForm.patientId = p.id;
+          this.labForm.patientId = p.id;
+          this.documentForm.patientId = p.id;
+          this.loadClinicalPatient(p.id);
           this.risk = null;
 
         }
@@ -3296,184 +5369,112 @@ export class ShellComponent {
   // =====================================================
 
   runRisk(id: string) {
-    if (!id) return;
-    this.aiPatientId = id;
-    this.api.post<any>('/ai/risk/' + id, {}).subscribe(x => {
-      this.risk = x;
-      this.api.get<any[]>('/ai/risk/' + id + '/history').subscribe(h => this.riskHistory = h);
-      this.tab = 'aiRisk';
-    });
-  }
 
-  loadFederated() {
-    this.api.get<any>('/ai/federated-demo').subscribe(x => { this.federated = x; this.tab = 'aiRisk'; });
-  }
+    this.api
+      .post<any>(
+        '/ai/risk/' +
+        id,
+        {}
+      )
+      .subscribe(
 
+        x => {
 
-  // =====================================================
-  // MILESTONE 3 · MONITORING
-  // =====================================================
+          this.risk = x;
 
-  loadMonitoring() {
-    if (!this.monitoringPatientId) { this.monitoring = null; this.monitoringAttention = false; return; }
-    this.api.get<any>('/monitoring/' + this.monitoringPatientId + '/latest')
-      .subscribe({ next: x => { this.monitoring = x; this.monitoringAlerts = (x.recentAlerts || []).slice(0, 6); }, error: () => { this.monitoring = null; } });
-  }
-
-  trendLabel(k: string) { return ({heartRate:'Heart Rate', oxygen:'SpO₂', systolic:'Systolic BP', glucose:'Glucose'} as any)[k] || k; }
-  trendPoints(): number[] {
-    const rows = (this.monitoring?.recentVitals || []).slice().reverse();
-    return rows.map((v:any) => Number(v?.[this.monitorTrendKey])).filter((v:number) => Number.isFinite(v));
-  }
-  trendPolyline(): string {
-    const pts = this.trendPoints(); if (!pts.length) return '';
-    const min=Math.min(...pts), max=Math.max(...pts), range=max-min || 1;
-    return pts.map((v,i)=>`${45 + (i/Math.max(pts.length-1,1))*830},${215-((v-min)/range)*180}`).join(' ');
-  }
-  trendMin() { const p=this.trendPoints(); return p.length ? Math.min(...p).toFixed(0) : '—'; }
-  trendMax() { const p=this.trendPoints(); return p.length ? Math.max(...p).toFixed(0) : '—'; }
-
-  private nextLiveVital(critical = false) {
-    const last = this.liveVitalSeed || this.monitoring?.latestVital || {};
-    const drift = (base: number, step: number, min: number, max: number) => {
-      const current = Number.isFinite(Number(base)) ? Number(base) : (min + max) / 2;
-      const next = current + (Math.random() * step * 2 - step);
-      return Math.round(Math.max(min, Math.min(max, next)));
-    };
-
-    const vital: any = {
-      patientId: this.monitoringPatientId,
-      heartRate: critical ? 145 : drift(last.heartRate ?? 72, 5, 60, 105),
-      systolic: critical ? 182 : drift(last.systolic ?? 122, 4, 105, 145),
-      diastolic: critical ? 105 : drift(last.diastolic ?? 78, 3, 65, 90),
-      oxygen: critical ? 88 : drift(last.oxygen ?? 97, 1, 94, 99),
-      glucose: critical ? 285 : drift(last.glucose ?? 95, 8, 75, 145),
-      temperature: critical ? 38.1 : Number((Number(last.temperature ?? 36.7) + (Math.random() * .16 - .08)).toFixed(1)),
-      source: 'WEARABLE-LIVE',
-      recordedAt: new Date().toISOString()
-    };
-    this.liveVitalSeed = vital;
-    return vital;
-  }
-
-  private appendLocalVital(vital: any) {
-    const existing = Array.isArray(this.monitoring?.recentVitals) ? this.monitoring.recentVitals : [];
-    const rows = [vital, ...existing].slice(0, 12);
-    this.monitoring = {
-      ...(this.monitoring || {}),
-      latestVital: vital,
-      recentVitals: rows
-    };
-  }
-
-  private sendLiveVital(critical = false) {
-    if (!this.monitoringPatientId || !this.monitoringRunning && !critical) return;
-    const vital = this.nextLiveVital(critical);
-
-    // IMPORTANT: update the live chart immediately. The previous implementation
-    // refreshed the whole monitoring object after every POST, which replaced the
-    // freshly appended point with the backend's older snapshot. That made the
-    // graph look frozen even though the timer was running.
-    this.monitoringAttention = critical || this.monitoringAttention;
-    this.appendLocalVital(vital);
-    this.monitoringUpdatedAt = new Date();
-
-    // Persist the same reading through the real backend. The UI does not wait for
-    // the HTTP response, so the live stream remains visibly moving while MongoDB,
-    // threshold detection and Kafka continue to receive the event.
-    this.api.post<any>('/vitals', vital).subscribe({
-      next: () => {
-        // Do NOT call loadMonitoring()/refresh() here. Those calls can overwrite
-        // the just-added point with an older backend snapshot. Do a full backend
-        // sync only when the user presses Refresh or when the stream is stopped.
-      },
-      error: err => {
-        console.error('Live vital ingestion failed', err);
-        if (!this.monitoringErrorShown) {
-          this.monitoringErrorShown = true;
-          alert('Live graph is running, but the backend /vitals API rejected a reading. The UI stream is active; check the backend console/API.');
         }
-      }
-    });
-  }
 
-  simulateCritical() {
-    if (!this.monitoringPatientId) return;
-    this.sendLiveVital(true);
-  }
+      );
 
-  startMonitoring() {
-    if (!this.monitoringPatientId || this.monitoringRunning) return;
-    this.monitoringRunning = true;
-    this.monitoringCycle = 0;
-    this.monitoringErrorShown = false;
-    this.liveVitalSeed = this.monitoring?.latestVital || null;
-    this.sendLiveVital(false);
-    // Generate a new wearable reading every 3 seconds. Each reading is persisted
-    // through /vitals, then the monitoring endpoint is refreshed.
-    this.monitoringTimer = setInterval(() => {
-      if (!this.monitoringRunning) return;
-      this.monitoringCycle++;
-      this.sendLiveVital(false);
-    }, 3000);
-  }
-
-  stopMonitoring() {
-    this.monitoringRunning = false;
-    if (this.monitoringTimer) {
-      clearInterval(this.monitoringTimer);
-      this.monitoringTimer = null;
-    }
-    if (this.monitoringPatientId) this.loadMonitoring();
-  }
-
-  monitoringStatus() {
-    return this.monitoringAttention ? 'ATTENTION REQUIRED' : 'STABLE';
-  }
-
-  prettyAlertType(type: string) {
-    return (type || '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-  }
-
-  clearMonitoringView() {
-    this.stopMonitoring();
-    this.monitoring = null;
-    this.monitoringAlerts = [];
-    this.monitoringAttention = false;
-  }
-
-  overallLevel(r: any) {
-    const levels = [r?.cardiovascularLevel, r?.diabetesLevel];
-    if (levels.includes('HIGH')) return 'HIGH';
-    if (levels.includes('MODERATE')) return 'MODERATE';
-    return 'LOW';
   }
 
 
   // =====================================================
-  // ADD VITAL
+  // VITAL ENTRY
   // =====================================================
 
   addVital() {
-    if (!this.selected) { alert('Select a patient first.'); return; }
-    this.vital = { patientId:this.selected.patient.id, heartRate:85, systolic:120, diastolic:80, oxygen:98, glucose:100, source:'WEARABLE' };
-    this.tab='vitals';
+    this.vital = {
+      patientId: this.selected?.patient?.id || this.vital?.patientId || '',
+      heartRate: null,
+      systolic: null,
+      diastolic: null,
+      oxygen: null,
+      temperature: null,
+      glucose: null,
+      source: 'MANUAL'
+    };
+    this.recentVitalHistory = [];
+    this.tab = 'vitals';
+    if (this.vital.patientId) this.loadRecentVitalHistory();
+  }
+
+  clearVitalForm() {
+    const patientId = this.vital?.patientId || this.selected?.patient?.id || '';
+    this.vital = { patientId, heartRate: null, systolic: null, diastolic: null, oxygen: null, temperature: null, glucose: null, source: 'MANUAL' };
+    this.recentVitalHistory = [];
+    if (patientId) this.loadRecentVitalHistory();
+  }
+
+  loadCriticalDemo() {
+    const patientId = this.vital?.patientId || this.selected?.patient?.id || this.patients[0]?.id || '';
+    this.vital = {
+      patientId,
+      heartRate: 145,
+      systolic: 190,
+      diastolic: 125,
+      oxygen: 84,
+      temperature: 40.2,
+      glucose: 320,
+      source: 'WEARABLE-SIMULATOR'
+    };
+    if (!patientId) alert('Select a patient before loading the critical demo.');
+  }
+
+  loadRecentVitalHistory() {
+    if (!this.vital?.patientId) { this.recentVitalHistory = []; return; }
+    this.api.get<any[]>('/vitals/' + this.vital.patientId).subscribe({
+      next: x => this.recentVitalHistory = x || [],
+      error: err => { console.error('Vital history load failed', err); this.recentVitalHistory = []; }
+    });
   }
 
   sendVital() {
-    const raw = String(this.vital?.patientId || '').trim();
-    const patient = this.patients.find((p:any) => String(p.id) === raw || String(p.mrn || '').toLowerCase() === raw.toLowerCase());
-    const patientId = patient?.id || raw;
-    if (!patientId) { alert('Enter a patient ID or MRN.'); return; }
-    const payload = { ...this.vital, patientId, source:this.vital.source || 'WEARABLE' };
-    this.api.post<any>('/vitals', payload).subscribe({
+    const v = this.vital || {};
+    const required = ['patientId','heartRate','systolic','diastolic','oxygen','temperature','glucose'];
+    const missing = required.filter(k => v[k] === null || v[k] === undefined || v[k] === '');
+    if (missing.length) {
+      alert('Please enter all vital values: Heart Rate, Blood Pressure, SpO₂, Temperature and Glucose.');
+      return;
+    }
+    if (!this.patients.some(p => String(p.id) === String(v.patientId))) {
+      alert('Please select a valid patient.');
+      return;
+    }
+
+    this.vitalSaving = true;
+    this.api.post<any>('/vitals', {
+      patientId: v.patientId,
+      heartRate: Number(v.heartRate),
+      systolic: Number(v.systolic),
+      diastolic: Number(v.diastolic),
+      oxygen: Number(v.oxygen),
+      temperature: Number(v.temperature),
+      glucose: Number(v.glucose),
+      source: v.source || 'MANUAL'
+    }).subscribe({
       next: () => {
-        if (patient) { this.selectPatient(patient); }
+        this.vitalSaving = false;
+        this.loadRecentVitalHistory();
+        this.loadMonitoring(true);
         this.refresh();
-        if (this.monitoringPatientId === patientId) this.loadMonitoring();
-        alert('Vital reading saved successfully.');
+        alert('Vital reading saved. Monitoring thresholds and clinical alerts were evaluated.');
       },
-      error: err => { console.error(err); alert('Unable to save vital reading. Check the backend.'); }
+      error: err => {
+        this.vitalSaving = false;
+        console.error('Vital save failed:', err);
+        alert(err?.error?.message || 'Unable to save vital reading. Check the backend.');
+      }
     });
   }
 
@@ -3517,69 +5518,66 @@ export class ShellComponent {
 
 
   // =====================================================
-  // APPOINTMENT
+  // APPOINTMENT SCHEDULER
   // =====================================================
 
+  filteredDoctors() { return this.appointmentDoctors.filter(d => d.department === this.appointmentDepartment); }
+
+  selectAppointmentDepartment(department: string) { this.appointmentDepartment = department; this.appointmentDoctor = null; this.availableAppointmentSlots = []; }
+
+  selectAppointmentDoctor(doctor: any) { this.appointmentDoctor = doctor; this.appointmentForm.time = ''; this.refreshAppointmentSlots(); }
+
+  refreshAppointmentSlots() {
+    if (!this.appointmentDoctor || !this.appointmentForm.date) { this.availableAppointmentSlots = []; return; }
+    const day = new Date(this.appointmentForm.date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long'});
+    if (!this.appointmentDoctor.days.includes(day)) {
+      this.availableAppointmentSlots = [];
+      this.appointmentForm.time = '';
+      return;
+    }
+    const booked = new Set((this.appointments || [])
+      .filter(a => a.date === this.appointmentForm.date &&
+                   a.doctorName === this.appointmentDoctor.name &&
+                   String(a.status || '').toUpperCase() !== 'CANCELLED')
+      .map(a => String(a.time || '')));
+    this.availableAppointmentSlots = this.appointmentDoctor.slots.filter((slot: string) => !booked.has(slot));
+    if (!this.availableAppointmentSlots.includes(this.appointmentForm.time)) this.appointmentForm.time = '';
+  }
+
+  appointmentDayLabel() {
+    if (!this.appointmentForm.date) return 'Choose a date';
+    return new Date(this.appointmentForm.date + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'});
+  }
+
   addAppointment() {
-    const today = new Date().toISOString().slice(0,10);
-    this.appointmentForm = { patientId:this.selected?.patient?.id || this.patients[0]?.id || '', specialty:'', doctorName:'', date:today, time:'', status:'SCHEDULED', reason:'Follow-up consultation' };
-    this.appointmentFormOpen = true;
+    const doctor = this.appointmentDoctor || this.filteredDoctors()[0];
+    if (doctor) this.selectAppointmentDoctor(doctor);
+    this.openNewAppointment(doctor);
   }
 
-  closeAppointmentForm() { this.appointmentFormOpen = false; this.savingAppointment = false; }
-
-  doctorsForDepartment(dept:string) { return this.doctorDirectory.filter(d=>d.specialty===dept); }
-  availableDoctors() { return this.doctorsForDepartment(this.appointmentForm.specialty || ''); }
-  onAppointmentDepartmentChange() { this.appointmentForm.doctorName=''; this.appointmentForm.time=''; }
-  onAppointmentDoctorChange() { this.appointmentForm.time=''; }
-  onAppointmentDateChange() { this.appointmentForm.time=''; }
-  availableSlots(): string[] {
-    const doctor=this.doctorDirectory.find(d=>d.name===this.appointmentForm.doctorName);
-    if(!doctor) return [];
-    const date=this.appointmentForm.date;
-    return doctor.slots.filter((slot:string)=>!this.appointments.some((a:any)=>a.doctorName===doctor.name && a.date===date && a.time===slot && String(a.status||'SCHEDULED').toUpperCase()!=='CANCELLED'));
+  openNewAppointment(doctor: any = this.appointmentDoctor) {
+    if (!doctor) { alert('Please select a doctor first.'); return; }
+    this.appointmentDoctor = doctor; this.refreshAppointmentSlots();
+    this.appointmentForm.patientId = this.appointmentForm.patientId || this.selected?.patient?.id || this.patients[0]?.id || '';
+    this.appointmentForm.status = 'SCHEDULED';
+    this.showAppointmentForm = true;
   }
+
+  closeAppointmentForm() { if (!this.savingAppointment) this.showAppointmentForm = false; }
+
   saveAppointment() {
-    const p=this.patients.find((x:any)=>x.id===this.appointmentForm.patientId);
-    if(!p || !this.appointmentForm.doctorName || !this.appointmentForm.date || !this.appointmentForm.time) { alert('Please select patient, doctor, date and an available time.'); return; }
-    if(!this.availableSlots().includes(this.appointmentForm.time)) { alert('That slot is no longer available. Please choose another time.'); return; }
-    this.savingAppointment=true;
-    const payload={...this.appointmentForm, patientName:p.name, specialty:this.appointmentForm.specialty, status:'SCHEDULED'};
-    this.api.post<any>('/appointments',payload).subscribe({
-      next:()=>{ this.savingAppointment=false; this.closeAppointmentForm(); this.refresh(); if(this.selected?.patient?.id===p.id) this.selectPatient(p); alert('Appointment booked successfully.'); },
-      error:err=>{ this.savingAppointment=false; console.error(err); alert('Unable to book appointment. Check the backend.'); }
+    const f = this.appointmentForm, doctor = this.appointmentDoctor, patient = this.patients.find(p => p.id === f.patientId);
+    if (!patient || !doctor || !f.date || !f.time) { alert('Please select patient, doctor, date and an available time slot.'); return; }
+    if (!this.availableAppointmentSlots.includes(f.time)) { alert('Selected time is not available for this doctor.'); return; }
+    this.savingAppointment = true;
+    const payload: any = {patientId:patient.id,patientName:patient.name,doctorName:doctor.name,specialty:doctor.department,department:doctor.department,doctorSpecialty:doctor.specialty,date:f.date,time:f.time,status:f.status||'SCHEDULED',reason:f.reason||'General consultation'};
+    this.api.post<any>('/appointments', payload).subscribe({
+      next: () => { this.savingAppointment=false; this.showAppointmentForm=false; this.refreshAppointments(); alert('Appointment booked successfully with '+doctor.name+' at '+f.time+'.'); },
+      error: err => { this.savingAppointment=false; console.error('Appointment booking failed',err); alert(err?.error?.message||'Unable to book appointment. Please check the backend.'); }
     });
   }
 
-  barWidth(v: any) { return Math.min(100, Math.abs(Number(v || 0)) * 10); }
-
-  factorPercent(v: any, fallback: number) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return fallback;
-    return n <= 1 ? Math.round(n * 100) : Math.round(n);
-  }
-
-  highRiskCount() {
-    return this.riskHistory.filter((r:any) => r.cardiovascularLevel === 'HIGH' || r.diabetesLevel === 'HIGH').length || 23;
-  }
-
-  criticalAlertCount() {
-    return this.alerts.filter((a:any) => a.severity === 'CRITICAL').length;
-  }
-
-  selectedRiskPatientName() {
-    return this.patients.find((p:any) => p.id === this.aiPatientId)?.name || 'Select patient';
-  }
-
-  openEscalation(a:any) { this.escalationAlert = a; this.escalationOpen = true; }
-  closeEscalation() { this.escalationOpen = false; this.escalationAlert = null; }
-  dispatchEscalation() {
-    if (!this.escalationAlert?.id) { this.closeEscalation(); return; }
-    this.api.put<any>('/alerts/' + this.escalationAlert.id + '/escalate', { recipient:this.escalationTeam }).subscribe({
-      next:()=>{ this.closeEscalation(); this.refresh(); alert('Priority escalation dispatched.'); },
-      error:()=>{ alert('Escalation endpoint is not available in this backend. The alert was not marked as escalated.'); }
-    });
-  }
+  refreshAppointments() { this.api.get<any[]>('/appointments').subscribe({next:x=>this.appointments=x||[],error:err=>console.error('Appointment refresh failed',err)}); }
 
   // =====================================================
   // ACKNOWLEDGE ALERT
@@ -3611,76 +5609,246 @@ export class ShellComponent {
   // NEW PATIENT
   // =====================================================
 
+  createEmptyPatientForm() {
+    return {
+      mrn: 'MS-' + Math.floor(10000 + Math.random() * 89999),
+      name: '',
+      gender: 'Male',
+      dateOfBirth: '',
+      phone: '',
+      email: '',
+      bloodGroup: '',
+      emergencyContact: '',
+      address: '',
+      allergiesText: '',
+      conditionsText: ''
+    };
+  }
+
   newPatient() {
-    this.patientForm = { mrn:'MS-'+Math.floor(10000+Math.random()*89999), name:'', gender:'Male', dateOfBirth:'', phone:'', email:'', bloodGroup:'', emergencyContact:'', address:'', allergiesText:'', conditionsText:'' };
-    this.patientFormOpen = true;
+    this.newPatientForm = this.createEmptyPatientForm();
+    this.showPatientForm = true;
   }
-  cancelNewPatient() { this.patientFormOpen=false; this.savingPatient=false; }
+
+  cancelNewPatient() {
+    if (this.savingPatient) return;
+    this.showPatientForm = false;
+  }
+
   saveNewPatient() {
-    if(!this.patientForm.name?.trim()) { alert('Please enter patient name.'); return; }
-    this.savingPatient=true;
-    const payload={...this.patientForm, allergies:String(this.patientForm.allergiesText||'').split(',').map((x:string)=>x.trim()).filter(Boolean), conditions:String(this.patientForm.conditionsText||'').split(',').map((x:string)=>x.trim()).filter(Boolean)};
-    delete payload.allergiesText; delete payload.conditionsText;
-    this.api.post<any>('/patients',payload).subscribe({
-      next:()=>{ this.savingPatient=false; this.cancelNewPatient(); this.refresh(); alert('Patient created successfully.'); },
-      error:err=>{ this.savingPatient=false; console.error(err); alert('Unable to create patient. Check the backend.'); }
-    });
-  }
+    const f = this.newPatientForm;
+    if (!String(f.name || '').trim()) {
+      alert('Please enter patient name.');
+      return;
+    }
 
-  // =====================================================
-  // MILESTONE 4 · CARE PLAN & TREATMENT
-  // =====================================================
-  openCarePlans() {
-    this.tab='carePlans';
-    if(!this.carePatientId && this.patients.length) this.carePatientId=this.patients[0].id;
-    if(this.carePatientId) this.loadCarePlans();
-  }
+    this.savingPatient = true;
+    const payload: any = {
+      mrn: String(f.mrn || '').trim() || ('MS-' + Math.floor(10000 + Math.random() * 89999)),
+      name: String(f.name || '').trim(),
+      gender: f.gender || 'Male',
+      dateOfBirth: f.dateOfBirth || null,
+      phone: String(f.phone || '').trim(),
+      email: String(f.email || '').trim(),
+      bloodGroup: f.bloodGroup || '',
+      emergencyContact: String(f.emergencyContact || '').trim(),
+      address: String(f.address || '').trim(),
+      allergies: String(f.allergiesText || '').split(',').map((x: string) => x.trim()).filter(Boolean),
+      conditions: String(f.conditionsText || '').split(',').map((x: string) => x.trim()).filter(Boolean)
+    };
 
-  loadCarePlans() {
-    if(!this.carePatientId) return;
-    this.carePatient=this.patients.find((p:any)=>p.id===this.carePatientId) || null;
-    this.api.get<any[]>('/care-plans/'+this.carePatientId).subscribe({
-      next: plans => { this.carePlans=plans || []; this.selectedCarePlan=this.carePlans[0] || null; },
-      error: () => { this.carePlans=[]; this.selectedCarePlan=null; }
-    });
-    this.api.get<any>('/monitoring/'+this.carePatientId+'/latest').subscribe({
-      next: x => this.careMonitoring=x,
-      error: () => this.careMonitoring=null
-    });
-  }
-
-  generateCarePlan() {
-    if(!this.carePatientId) return;
-    this.careBusy=true; this.careMessage='';
-    this.api.post<any>('/care-plans/generate/'+this.carePatientId, {}).subscribe({
-      next: plan => {
-        this.careBusy=false; this.careMessage='Personalized care plan created successfully.';
-        this.loadCarePlans();
-        this.selectedCarePlan=plan;
+    this.api.post('/patients', payload).subscribe({
+      next: () => {
+        this.savingPatient = false;
+        this.showPatientForm = false;
+        this.newPatientForm = this.createEmptyPatientForm();
+        this.refresh();
+        alert('Patient created successfully.');
       },
-      error: err => {
-        this.careBusy=false; console.error(err); this.careMessage='Unable to create the care plan. Please check the backend.';
+      error: (err) => {
+        this.savingPatient = false;
+        console.error('Patient creation failed', err);
+        alert('Unable to create patient. Please check the backend and try again.');
       }
     });
   }
 
-  selectCarePlan(plan:any) { this.selectedCarePlan=plan; }
 
-  toggleCareTask(index:number, completed:boolean) {
-    if(!this.selectedCarePlan?.id) return;
-    this.api.put<any>('/care-plans/'+this.selectedCarePlan.id+'/tasks/'+index+'?completed='+completed, {}).subscribe({
-      next: plan => { this.selectedCarePlan=plan; const idx=this.carePlans.findIndex((c:any)=>c.id===plan.id); if(idx>=0) this.carePlans[idx]=plan; },
-      error: () => { this.careMessage='Unable to update task status.'; }
-    });
+  // =====================================================
+  // DELETE PATIENT
+  // =====================================================
+
+  deletePatient(p: any) {
+
+    if (!p?.id) {
+      alert('Invalid patient record.');
+      return;
+    }
+
+    const name = p.name || p.email || 'this patient';
+
+    const confirmed = confirm(
+      'Delete ' + name + '?\n\n' +
+      'This permanently removes the patient and associated clinical records.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.api
+      .delete<any>('/patients/' + p.id)
+      .subscribe({
+
+        next: () => {
+
+          if (this.selected?.patient?.id === p.id) {
+            this.selected = null;
+            this.twin = null;
+            this.risk = null;
+            this.monitorPatient = null;
+            this.monitorPatientId = '';
+          }
+
+          this.refresh();
+
+          if (this.tab === 'patient360') {
+            this.tab = 'patients';
+          }
+
+          alert('Patient deleted successfully.');
+        },
+
+        error: (error) => {
+          console.error('Delete patient error:', error);
+          alert(
+            error?.error?.message ||
+            'Unable to delete patient. Check the backend.'
+          );
+        }
+
+      });
   }
 
-  deltaValue(key:string) {
-    const rows=(this.careMonitoring?.recentVitals || []);
-    if(rows.length<2) return '—';
-    const latest=Number(rows[0]?.[key]); const previous=Number(rows[1]?.[key]);
-    if(!Number.isFinite(latest) || !Number.isFinite(previous)) return '—';
-    const d=latest-previous; return (d>=0?'+':'')+d.toFixed(0);
+
+  dashboardBarWidth(value: any): number {
+    const values = [this.dash?.patients, this.dash?.appointments, this.dash?.activeAlerts, this.dash?.carePlans]
+      .map((x: any) => Number(x || 0));
+    const max = Math.max(...values, 1);
+    const n = Number(value || 0);
+    return n > 0 ? Math.max(8, Math.round((n / max) * 100)) : 0;
   }
+
+  // =====================================================
+  // GLOBAL PATIENT SEARCH
+  // =====================================================
+  runGlobalSearch() {
+    const q = String(this.globalSearch || '').trim().toLowerCase();
+    if (!q) { this.tab = 'patients'; return; }
+    const p = this.patients.find(x => String(x.name || '').toLowerCase().includes(q) || String(x.mrn || '').toLowerCase().includes(q));
+    if (!p) { alert('No patient found for "' + this.globalSearch + '".'); return; }
+    this.selectPatient(p);
+    this.globalSearch = '';
+  }
+
+  // =====================================================
+  // M4 CARE PLAN & TREATMENT
+  // =====================================================
+  emptyCarePlanForm() { return { patientId:'', title:'', goal:'', status:'ACTIVE', actionsText:'', followUpDate:'', progress:0, adherence:0, priority:'MEDIUM', category:'GENERAL', generatedBy:'CLINICIAN' }; }
+  openCarePlansForSelected() { const id=this.selected?.patient?.id; if(!id){alert('Select a patient first.');return;} this.carePlanPatientId=id; this.tab='careplans'; this.loadCarePlans(); }
+  loadCarePlans() { if(!this.carePlanPatientId){this.carePlans=[];return;} this.api.get<any[]>('/care-plans/'+this.carePlanPatientId).subscribe({next:x=>this.carePlans=x||[],error:err=>{console.error('Care plan load failed',err);alert('Unable to load care plans. Check the backend.');}}); }
+  openCarePlanForm(cp:any=null){ this.editingCarePlan=cp; this.carePlanFormOpen=true; this.carePlanForm=cp?{patientId:cp.patientId,title:cp.title||'',goal:cp.goal||'',status:cp.status||'ACTIVE',actionsText:(cp.actions||[]).map((a:string)=>this.actionLabel(a)).join('\n'),followUpDate:cp.followUpDate||'',progress:cp.progress||0,adherence:cp.adherence||0,priority:cp.priority||'MEDIUM',category:cp.category||'GENERAL',generatedBy:cp.generatedBy||'CLINICIAN'}:{...this.emptyCarePlanForm(),patientId:this.carePlanPatientId,followUpDate:new Date(Date.now()+28*86400000).toISOString().slice(0,10)}; }
+  closeCarePlanForm(){if(!this.carePlanBusy)this.carePlanFormOpen=false;}
+  saveCarePlan(){const f=this.carePlanForm;if(!f.patientId||!String(f.title||'').trim()||!String(f.goal||'').trim()){alert('Patient, title and goal are required.');return;}const actions=String(f.actionsText||'').split(/\n|,/).map((x:string)=>x.trim()).filter(Boolean);const payload:any={...f,title:String(f.title).trim(),goal:String(f.goal).trim(),actions};delete payload.actionsText;this.carePlanBusy=true;const req=this.editingCarePlan?this.api.put<any>('/care-plans/'+this.editingCarePlan.id,payload):this.api.post<any>('/care-plans',payload);req.subscribe({next:()=>{this.carePlanBusy=false;this.carePlanFormOpen=false;this.loadCarePlans();this.refresh();},error:err=>{this.carePlanBusy=false;console.error('Care plan save failed',err);alert(err?.error?.message||'Unable to save care plan.');}});}
+  generateCarePlan(){if(!this.carePlanPatientId)return;this.carePlanBusy=true;this.api.post<any>('/care-plans/generate/'+this.carePlanPatientId,{}).subscribe({next:()=>{this.carePlanBusy=false;this.loadCarePlans();this.refresh();},error:err=>{this.carePlanBusy=false;console.error('Care plan generation failed',err);alert(err?.error?.message||'Unable to generate care plan.');}});}
+  private updateCarePlan(cp:any,patch:any,successMessage=''){if(!cp?.id)return;const payload:any={...cp,...patch,actions:Array.isArray(patch.actions)?patch.actions:(cp.actions||[])};delete payload._id;delete payload.actionsText;this.carePlanBusy=true;this.api.put<any>('/care-plans/'+cp.id,payload).subscribe({next:updated=>{this.carePlanBusy=false;const i=this.carePlans.findIndex(x=>x.id===cp.id);if(i>=0)this.carePlans[i]=updated||{...cp,...patch};this.carePlans=[...this.carePlans];if(successMessage)alert(successMessage);this.refresh();},error:err=>{this.carePlanBusy=false;console.error('Care plan update failed',err);alert(err?.error?.message||'Unable to update the care plan.');}});}
+  actionDone(action:any){return String(action||'').startsWith('DONE::');}
+  actionLabel(action:any){return String(action||'').replace(/^DONE::\s*/,'').trim();}
+  completedActionCount(cp:any){return(cp?.actions||[]).filter((a:any)=>this.actionDone(a)).length;}
+  toggleTreatmentAction(cp:any,action:any){const actions=[...(cp.actions||[])];const i=actions.indexOf(action);if(i<0)return;const done=this.actionDone(action);actions[i]=done?this.actionLabel(action):'DONE:: '+this.actionLabel(action);const total=actions.length;const completed=actions.filter((a:any)=>this.actionDone(a)).length;const progress=total?Math.round((completed/total)*100):Number(cp.progress||0);this.updateCarePlan(cp,{actions,progress});}
+  changeCareProgress(cp:any,delta:number){this.updateCarePlan(cp,{progress:Math.max(0,Math.min(100,Number(cp.progress||0)+delta))});}
+  changeCareAdherence(cp:any,delta:number){this.updateCarePlan(cp,{adherence:Math.max(0,Math.min(100,Number(cp.adherence||0)+delta))});}
+  setCareStatus(cp:any,status:string){this.updateCarePlan(cp,{status},status==='COMPLETED'?'Care plan marked as completed.':'Care plan status updated.');}
+  careActiveCount(){return this.carePlans.filter(cp=>String(cp.status||'ACTIVE')==='ACTIVE').length;}
+  careCompletedCount(){return this.carePlans.filter(cp=>String(cp.status||'')==='COMPLETED').length;}
+  careAverageProgress(){if(!this.carePlans.length)return 0;return Math.round(this.carePlans.reduce((s,cp)=>s+Number(cp.progress||0),0)/this.carePlans.length);}
+  careAverageAdherence(){if(!this.carePlans.length)return 0;return Math.round(this.carePlans.reduce((s,cp)=>s+Number(cp.adherence||0),0)/this.carePlans.length);}
+  careDueCount(){return this.carePlans.filter(cp=>this.isCareDue(cp)).length;}
+  isCareDue(cp:any){if(!cp?.followUpDate||cp.status==='COMPLETED')return false;const due=new Date(cp.followUpDate+'T23:59:59').getTime();return due<=Date.now()+7*86400000;}
+  careDueClass(cp:any){if(cp?.status==='COMPLETED')return'review-complete';if(!cp?.followUpDate)return'review-none';const due=new Date(cp.followUpDate+'T23:59:59').getTime();if(due<Date.now())return'review-overdue';if(due<=Date.now()+7*86400000)return'review-soon';return'review-ok';}
+  careReviewLabel(cp:any){if(cp?.status==='COMPLETED')return'Completed';if(!cp?.followUpDate)return'No review date';const due=new Date(cp.followUpDate+'T23:59:59').getTime();if(due<Date.now())return'Review overdue';if(due<=Date.now()+7*86400000)return'Review soon';return'Review '+cp.followUpDate;}
+  deleteCarePlan(cp:any){if(!cp?.id||!confirm('Delete this care plan permanently?'))return;this.api.delete<any>('/care-plans/'+cp.id).subscribe({next:()=>{this.loadCarePlans();this.refresh();},error:err=>{console.error('Care plan delete failed',err);alert(err?.error?.message||'Unable to delete care plan.');}});}
+  priorityClass(priority:string){return String(priority||'MEDIUM').toLowerCase();}
+  careStatusClass(status:string){return String(status||'ACTIVE').toLowerCase().replace('_','-');}
+
+  // =====================================================
+  // ADVANCED CLINICAL HUB
+  // =====================================================
+  loadClinicalPatient(id: string) {
+    if (!id) return;
+    this.clinicalPatientId = id;
+    this.prescriptionForm.patientId = id;
+    this.labForm.patientId = id;
+    this.documentForm.patientId = id;
+    this.api.get<any>('/clinical/patient/' + id).subscribe({ next: x => this.clinicalData = x, error: e => console.error('Clinical patient load failed', e) });
+    this.api.get<any>('/clinical/analytics').subscribe({ next: x => this.clinicalAnalytics = x });
+    this.loadClinicalNotifications();
+  }
+
+  loadClinicalNotifications() { this.api.get<any[]>('/clinical/notifications').subscribe({ next: x => this.clinicalNotifications = x || [] }); }
+
+  askAssistant() {
+    if (!this.clinicalPatientId || !this.assistantQuestion.trim()) return;
+    this.assistantBusy = true;
+    this.api.post<any>('/clinical/assistant', { patientId: this.clinicalPatientId, question: this.assistantQuestion.trim() }).subscribe({ next: x => { this.assistantAnswer = x; this.assistantBusy = false; }, error: e => { this.assistantBusy = false; alert(e?.error?.message || 'Unable to contact clinical assistant.'); } });
+  }
+
+  recommendMedicines() {
+    if (!this.clinicalPatientId) return;
+    this.api.get<any>('/clinical/medicine/recommendations/' + this.clinicalPatientId + '?diagnosis=' + encodeURIComponent(this.recommendationDiagnosis || this.prescriptionForm.diagnosis || '')).subscribe({ next: x => this.medicineRecommendations = x.suggestions || [], error: e => alert(e?.error?.message || 'Unable to load medication suggestions.') });
+  }
+
+  useRecommendation(r:any) { this.prescriptionForm.medicineName=r.medicine; this.prescriptionForm.strength=r.strength; }
+
+  createPrescription() {
+    const f=this.prescriptionForm;
+    if(!this.clinicalPatientId || !f.medicineName){ alert('Select a patient and medicine.'); return; }
+    const patient=this.patients.find(p=>String(p.id)===String(this.clinicalPatientId));
+    this.prescriptionBusy=true;
+    this.api.post<any>('/clinical/prescriptions',{...f,patientId:this.clinicalPatientId,patientName:patient?.name||'',doctorName:this.user?.name||'Clinical User'}).subscribe({next:()=>{this.prescriptionBusy=false;this.loadClinicalPatient(this.clinicalPatientId);alert('Prescription saved and linked to the patient.');},error:e=>{this.prescriptionBusy=false;alert(e?.error?.message||'Unable to save prescription.');}});
+  }
+
+  recordMedicationEvent(rx:any,eventType:string) {
+    this.api.post<any>('/clinical/medication-events',{patientId:this.clinicalPatientId,prescriptionId:rx.id,medicineName:rx.medicineName,eventType,scheduledAt:new Date().toISOString(),notes:''}).subscribe({next:()=>this.loadClinicalPatient(this.clinicalPatientId),error:e=>alert(e?.error?.message||'Unable to record medication event.')});
+  }
+
+  checkInteraction() {
+    if(!this.interactionA.trim() || !this.interactionB.trim()){alert('Enter both medicines.');return;}
+    this.api.post<any>('/clinical/medicine/interactions',{medicineA:this.interactionA,medicineB:this.interactionB}).subscribe({next:x=>this.interactionResult=x,error:e=>alert(e?.error?.message||'Unable to check interaction.')});
+  }
+
+  saveLab() {
+    const f=this.labForm;if(!this.clinicalPatientId||!f.testName||!f.result){alert('Test name and result are required.');return;}
+    this.labBusy=true;this.api.post<any>('/labs',{...f,patientId:this.clinicalPatientId}).subscribe({next:()=>{this.labBusy=false;this.labForm={patientId:this.clinicalPatientId,testName:'',result:'',unit:'',referenceRange:''};this.loadClinicalPatient(this.clinicalPatientId);},error:e=>{this.labBusy=false;alert(e?.error?.message||'Unable to save lab result.');}});
+  }
+
+  onDocumentFile(event:any){ this.selectedDocumentFile = event?.target?.files?.[0] || null; if(this.selectedDocumentFile && !this.documentForm.name) this.documentForm.name=this.selectedDocumentFile.name; }
+
+  saveDocument() {
+    const f=this.documentForm;if(!this.clinicalPatientId||!f.name){alert('Document name is required.');return;}
+    this.documentBusy=true;
+    if(this.selectedDocumentFile){
+      const data=new FormData(); data.append('file',this.selectedDocumentFile); data.append('patientId',this.clinicalPatientId); data.append('documentType',f.documentType||'OTHER'); data.append('description',f.description||'');
+      this.api.upload<any>('/clinical/documents/upload',data).subscribe({next:()=>{this.documentBusy=false;this.selectedDocumentFile=null;this.documentForm={patientId:this.clinicalPatientId,name:'',documentType:'LAB_REPORT',description:''};this.loadClinicalPatient(this.clinicalPatientId);},error:e=>{this.documentBusy=false;alert(e?.error?.message||'Unable to upload document.');}});
+    } else {
+      this.api.post<any>('/clinical/documents',{...f,patientId:this.clinicalPatientId,storageKey:'METADATA/'+Date.now()}).subscribe({next:()=>{this.documentBusy=false;this.documentForm={patientId:this.clinicalPatientId,name:'',documentType:'LAB_REPORT',description:''};this.loadClinicalPatient(this.clinicalPatientId);},error:e=>{this.documentBusy=false;alert(e?.error?.message||'Unable to save document record.');}});
+    }
+  }
+
+  loadPatientQr(){ if(!this.clinicalPatientId)return; this.api.get<any>('/clinical/patient/'+this.clinicalPatientId+'/qr').subscribe({next:x=>{this.qrImage=x.image;this.qrPayload=x.payload;},error:e=>alert(e?.error?.message||'Unable to generate patient QR.')}); }
+  copyQrPayload(){ if(this.qrPayload) navigator.clipboard?.writeText(this.qrPayload); }
+
+  markNotificationRead(id:string){this.api.put<any>('/clinical/notifications/'+id+'/read',{}).subscribe({next:()=>this.loadClinicalNotifications()});}
 
   // =====================================================
   // FHIR
@@ -3749,15 +5917,339 @@ export class ShellComponent {
   }
 
 
-  initials(name: string) {
-    return (name || 'Patient').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
+  // =====================================================
+  // M3 MONITORING
+  // =====================================================
+
+  loadMonitoring(silent = false) {
+    this.api.get<any>('/monitoring/overview', !silent).subscribe({
+      next: x => { this.monitorOverview = x; this.monitoringLive = true; this.monitoringUpdated = new Date(); if (this.monitorPatientId) this.loadMonitorPatient(this.monitorPatientId, true); },
+      error: () => { this.monitoringLive = false; if (!silent) alert('Monitoring service is unavailable. Check the backend.'); }
+    });
   }
 
+  selectMonitorPatient(id: string) { this.monitorPatientId = id; this.loadMonitorPatient(id); }
 
-  ngOnDestroy() {
-    this.stopMonitoring();
+  loadMonitorPatient(id: string, silent = false) {
+    this.api.get<any>('/monitoring/patient/' + id, !silent).subscribe({ next: x => this.monitorPatient = x, error: () => { if (!silent) alert('Unable to load patient monitoring data.'); } });
   }
 
+  patientName(id: string) { return this.patients.find(p => p.id === id)?.name || ('Patient ' + id); }
+  patientMrn(id: string) { return this.patients.find(p => p.id === id)?.mrn || '—'; }
+  monitorStatusClass(status: string) { return String(status || '').toLowerCase(); }
+
+  valueStatus(type: string, value: any): string {
+    if (value === null || value === undefined || value === '') return 'NO DATA';
+    const n = Number(value);
+    if (type === 'heartRate') return n > 120 || n < 45 ? 'CRITICAL' : (n > 100 || n < 60 ? 'WARNING' : 'NORMAL');
+    if (type === 'oxygen') return n < 92 ? 'CRITICAL' : (n < 95 ? 'WARNING' : 'NORMAL');
+    if (type === 'glucose') return n > 250 || n < 55 ? 'CRITICAL' : (n > 180 || n < 70 ? 'WARNING' : 'NORMAL');
+    if (type === 'temperature') return n >= 39 || n < 35 ? 'CRITICAL' : (n > 37.5 ? 'WARNING' : 'NORMAL');
+    if (type === 'bp') { const s=Number(value?.systolic), d=Number(value?.diastolic); return s>180||s<90||d>120||d<60 ? 'CRITICAL' : (s>140||s<100||d>90||d<65 ? 'WARNING' : 'NORMAL'); }
+    return 'NORMAL';
+  }
+
+  trendPoints(): number[] {
+    if (!this.monitorPatient?.vitals) return [];
+    return [...this.monitorPatient.vitals]
+      .reverse()
+      .map((v:any) => Number(v[this.trendKey]))
+      .filter((v:number) => Number.isFinite(v))
+      .slice(-30);
+  }
+
+  trendPolyline(): string {
+    const pts = this.trendPoints(); if (!pts.length) return '';
+    const min = Math.min(...pts), max = Math.max(...pts), range = max-min || 1;
+    return pts.map((v,i) => `${(i/(Math.max(pts.length-1,1)))*620+10},${175-((v-min)/range)*145}`).join(' ');
+  }
+  trendMin() { const p=this.trendPoints(); return p.length ? Math.min(...p).toFixed(0) : '—'; }
+  trendMax() { const p=this.trendPoints(); return p.length ? Math.max(...p).toFixed(0) : '—'; }
+
+ // =====================================================
+// LIVE WEARABLE DEMO STREAM
+// =====================================================
+
+
+private demoVitals: any = {
+  heartRate: 82,
+  systolic: 128,
+  diastolic: 82,
+  oxygen: 97,
+  glucose: 118,
+  temperature: 36.8
+};
+
+toggleLiveSimulation() {
+
+  if (this.simulationRunning) {
+    this.stopLiveSimulation();
+
+  } else {
+    this.startLiveSimulation();
+  }
+
+}
+
+startLiveSimulation() {
+
+  if (!this.monitorPatientId) {
+
+    alert(
+      'Select a patient stream first.'
+    );
+
+    return;
+  }
+
+  // Prevent duplicate timers
+  this.stopLiveSimulation();
+
+  this.simulationRunning = true;
+
+  // Start from the currently displayed values
+  const latest =
+    this.monitorPatient?.latest || {};
+
+  this.demoVitals = {
+
+    heartRate:
+      Number(latest.heartRate) || 82,
+
+    systolic:
+      Number(latest.systolic) || 128,
+
+    diastolic:
+      Number(latest.diastolic) || 82,
+
+    oxygen:
+      Number(latest.oxygen) || 97,
+
+    glucose:
+      Number(latest.glucose) || 118,
+
+    temperature:
+      Number(latest.temperature) || 36.8
+
+  };
+
+  // Immediately send first reading
+  this.pushSimulatedVital();
+
+  // Continue sending readings every 2.5 seconds
+  this.simulationTimer =
+    setInterval(() => {
+
+      if (this.simulationRunning) {
+        this.pushSimulatedVital();
+      }
+
+    }, 2500);
+
+}
+
+stopLiveSimulation() {
+
+  this.simulationRunning = false;
+
+  if (this.simulationTimer) {
+
+    clearInterval(
+      this.simulationTimer
+    );
+
+    this.simulationTimer = null;
+  }
+
+}
+
+private randomDrift(
+  value: number,
+  amount: number,
+  min: number,
+  max: number
+): number {
+
+  const change =
+    (Math.random() * 2 - 1) * amount;
+
+  const next =
+    value + change;
+
+  return Math.max(
+    min,
+    Math.min(
+      max,
+      next
+    )
+  );
+
+}
+
+private randomInteger(
+  value: number,
+  amount: number,
+  min: number,
+  max: number
+): number {
+
+  return Math.round(
+    this.randomDrift(
+      value,
+      amount,
+      min,
+      max
+    )
+  );
+
+}
+
+pushSimulatedVital() {
+
+  if (
+    !this.monitorPatientId ||
+    !this.simulationRunning
+  ) {
+
+    return;
+  }
+
+  // ---------------------------------------------------
+  // Generate continuously changing wearable values
+  // ---------------------------------------------------
+
+  this.demoVitals.heartRate =
+    this.randomInteger(
+      this.demoVitals.heartRate,
+      7,
+      60,
+      115
+    );
+
+  this.demoVitals.systolic =
+    this.randomInteger(
+      this.demoVitals.systolic,
+      5,
+      105,
+      145
+    );
+
+  this.demoVitals.diastolic =
+    this.randomInteger(
+      this.demoVitals.diastolic,
+      4,
+      65,
+      95
+    );
+
+  this.demoVitals.oxygen =
+    this.randomInteger(
+      this.demoVitals.oxygen,
+      1,
+      94,
+      99
+    );
+
+  this.demoVitals.glucose =
+    this.randomInteger(
+      this.demoVitals.glucose,
+      10,
+      80,
+      180
+    );
+
+  this.demoVitals.temperature =
+    Number(
+      this.randomDrift(
+        this.demoVitals.temperature,
+        0.2,
+        36.3,
+        37.5
+      ).toFixed(1)
+    );
+
+  const payload: any = {
+
+    patientId:
+      this.monitorPatientId,
+
+    heartRate:
+      this.demoVitals.heartRate,
+
+    systolic:
+      this.demoVitals.systolic,
+
+    diastolic:
+      this.demoVitals.diastolic,
+
+    oxygen:
+      this.demoVitals.oxygen,
+
+    glucose:
+      this.demoVitals.glucose,
+
+    temperature:
+      this.demoVitals.temperature,
+
+    source:
+      'WEARABLE-SIMULATOR'
+
+  };
+
+  // ---------------------------------------------------
+  // IMPORTANT:
+  // Background stream must NOT show global loader
+  // ---------------------------------------------------
+
+  this.api
+    .post<any>(
+      '/vitals',
+      payload,
+      false
+    )
+    .subscribe({
+
+      next: () => {
+
+        /*
+         * Refresh the selected patient's monitoring
+         * data silently.
+         */
+
+        this.loadMonitorPatient(
+          this.monitorPatientId,
+          true
+        );
+
+        this.loadMonitoring(
+          true
+        );
+
+      },
+
+      error: (err) => {
+
+        /*
+         * IMPORTANT:
+         * Do NOT stop the whole live demo because
+         * one background request failed.
+         */
+
+        console.error(
+          'Live wearable event failed:',
+          err
+        );
+
+        /*
+         * Keep simulation running.
+         * The next interval will try again.
+         */
+
+      }
+
+    });
+
+}
 
   // =====================================================
   // LOGOUT
@@ -3765,7 +6257,13 @@ export class ShellComponent {
 
   logout() {
 
-    this.stopMonitoring();
+    this.stopLiveSimulation();
+
+    if (this.monitoringTimer) {
+      clearInterval(this.monitoringTimer);
+      this.monitoringTimer = null;
+    }
+
     localStorage.clear();
 
     this.router.navigateByUrl(
@@ -3773,8 +6271,5 @@ export class ShellComponent {
     );
 
   }
-
-
-
 
 }

@@ -10,4 +10,6 @@ public interface AlertRepo extends MongoRepository<Alert, String> {
     List<Alert> findByPatientIdOrderByCreatedAtDesc(String patientId);
 
     List<Alert> findByAcknowledgedFalseOrderByCreatedAtDesc();
+
+    boolean existsByPatientIdAndTypeAndMessageAndAcknowledgedFalse(String patientId, String type, String message);
 }

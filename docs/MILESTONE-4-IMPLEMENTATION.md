@@ -1,24 +1,25 @@
-# MediSphere – Milestone 4: Care Plan & Treatment
+# Milestone 4 — Care Plan & Treatment
 
-## Scope
-Weeks 7–8: move from risk and monitoring into a practical, patient-specific care-plan workflow.
+Milestone 4 completes the workflow from risk/monitoring to preventive care planning.
 
 ## What is implemented
-- Patient-specific care plan generation from existing patient conditions, latest vitals and latest available risk assessment.
-- Treatment tasks grouped by Treatment, Monitoring, Lifestyle, Follow-up and Clinical review.
-- Task completion tracking with a live progress percentage.
-- Follow-up date and care-team owner.
-- Latest BP, heart rate, SpO2 and glucose snapshot for progress review.
-- Previous care-plan history for the selected patient.
 
-## API
-- `POST /api/care-plans/generate/{patientId}` – create a personalized demo plan.
-- `GET /api/care-plans/{patientId}` – list plans for a patient.
-- `POST /api/care-plans` – save a manually supplied plan.
-- `PUT /api/care-plans/{id}/tasks/{taskIndex}?completed=true|false` – track task completion.
+1. Select a patient.
+2. Generate a patient-specific care plan from available patient data and the existing M2 risk engine.
+3. Show care tasks for treatment, monitoring, lifestyle and follow-up.
+4. Mark individual actions as completed or pending.
+5. Recalculate the care-plan progress percentage.
+6. Update adherence and plan status.
+7. Show follow-up date and previous care-plan history.
 
 ## Demo
-Open **M4 Care Plans → select patient → Generate care plan → complete tasks → review progress and latest readings**.
 
-## Important
-This milestone is an academic rule-based care-plan demonstration. It does not provide medical diagnosis, prescribing, or clinically validated treatment recommendations. Production clinical guidelines, clinician approval, and validation are future enhancements.
+Recommended patient: **Ananya Verma**.
+
+Demo flow:
+
+`M4 Care Plan → Select Ananya Verma → Generate Care Plan → Complete a task → Progress updates`
+
+## Accuracy note
+
+The current local implementation uses a rule-based academic/demo generation flow. It is not a clinically validated treatment engine.

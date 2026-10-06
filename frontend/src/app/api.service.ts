@@ -4,7 +4,7 @@ import {
   HttpHeaders
 } from '@angular/common/http';
 
-import { Observable } from 'rxjs';
+import { Observable, BehaviorSubject, finalize } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -13,131 +13,338 @@ export class ApiService {
 
   private baseUrl = 'http://localhost:8080/api';
 
-  constructor(private http: HttpClient) {}
+  private activeRequests = 0;
 
-  // =========================
+  private loadingState =
+    new BehaviorSubject<boolean>(false);
+
+  readonly loading$ =
+    this.loadingState.asObservable();
+
+  constructor(
+    private http: HttpClient
+  ) {}
+
+  // =====================================================
+  // GLOBAL LOADING CONTROL
+  // =====================================================
+
+  private track<T>(
+    request: Observable<T>
+  ): Observable<T> {
+
+    this.activeRequests++;
+
+    this.loadingState.next(true);
+
+    return request.pipe(
+
+      finalize(() => {
+
+        this.activeRequests =
+          Math.max(
+            0,
+            this.activeRequests - 1
+          );
+
+        this.loadingState.next(
+          this.activeRequests > 0
+        );
+
+      })
+
+    );
+  }
+
+  // =====================================================
   // COMMON HEADERS
-  // =========================
+  // =====================================================
 
   private headers(): HttpHeaders {
 
-    const token = localStorage.getItem('medisphere_token');
+    const token =
+      localStorage.getItem(
+        'medisphere_token'
+      );
 
-    let headers = new HttpHeaders({
-      'Content-Type': 'application/json'
-    });
+    let headers =
+      new HttpHeaders({
+        'Content-Type':
+          'application/json'
+      });
 
     if (token) {
-      headers = headers.set(
-        'Authorization',
-        `Bearer ${token}`
-      );
+
+      headers =
+        headers.set(
+          'Authorization',
+          `Bearer ${token}`
+        );
+
     }
 
     return headers;
   }
 
-  // =========================
+  // =====================================================
   // LOGIN
-  // =========================
+  // =====================================================
 
-  login(username: string, password: string): Observable<any> {
-    return this.http.post<any>(
-      `${this.baseUrl}/auth/login`,
-      { username, password },
-      { headers: new HttpHeaders({ 'Content-Type': 'application/json' }) }
-    );
-  }
-
-  register(body: { name: string; username: string; email: string; password: string }): Observable<any> {
-    return this.http.post<any>(
-      `${this.baseUrl}/auth/register`,
-      body,
-      { headers: new HttpHeaders({ 'Content-Type': 'application/json' }) }
-    );
-  }
-
-  // =========================
-  // GET
-  // =========================
-
-  get<T>(path: string): Observable<T> {
-
-    return this.http.get<T>(
-      `${this.baseUrl}${path}`,
+  login(
+    emailOrBody:
+      string |
       {
-        headers: this.headers()
-      }
+        identifier: string;
+        password: string;
+      },
+
+    password?: string
+
+  ): Observable<any> {
+
+    const body =
+      typeof emailOrBody === 'string'
+
+        ? {
+            identifier: emailOrBody,
+            password: password ?? ''
+          }
+
+        : emailOrBody;
+
+    return this.track(
+
+      this.http.post<any>(
+
+        `${this.baseUrl}/auth/login`,
+
+        body,
+
+        {
+          headers:
+            new HttpHeaders({
+              'Content-Type':
+                'application/json'
+            })
+        }
+
+      )
+
     );
+
   }
 
-  // =========================
+  // =====================================================
+  // GET
+  // =====================================================
+
+  get<T>(
+    path: string,
+    showLoading: boolean = true
+  ): Observable<T> {
+
+    const request =
+      this.http.get<T>(
+
+        `${this.baseUrl}${path}`,
+
+        {
+          headers:
+            this.headers()
+        }
+
+      );
+
+    /*
+     * showLoading = true
+     * -----------------
+     * Used for important user actions.
+     *
+     * showLoading = false
+     * ------------------
+     * Used for background
+     * monitoring / refresh
+     * requests.
+     */
+
+    return showLoading
+      ? this.track(request)
+      : request;
+
+  }
+
+  // =====================================================
   // POST
-  // =========================
+  // =====================================================
 
   post<T>(
     path: string,
-    body: any
+    body: any,
+    showLoading: boolean = true
   ): Observable<T> {
 
-    return this.http.post<T>(
-      `${this.baseUrl}${path}`,
-      body,
-      {
-        headers: this.headers()
-      }
-    );
+    const request =
+      this.http.post<T>(
+
+        `${this.baseUrl}${path}`,
+
+        body,
+
+        {
+          headers:
+            this.headers()
+        }
+
+      );
+
+    return showLoading
+      ? this.track(request)
+      : request;
+
   }
 
-  // =========================
+  // =====================================================
+  // MULTIPART UPLOAD
+  // =====================================================
+
+  upload<T>(
+    path: string,
+    formData: FormData,
+    showLoading: boolean = true
+  ): Observable<T> {
+
+    const token =
+      localStorage.getItem(
+        'medisphere_token'
+      );
+
+    let headers =
+      new HttpHeaders();
+
+    /*
+     * DO NOT set Content-Type manually
+     * for FormData.
+     *
+     * Browser automatically adds:
+     *
+     * multipart/form-data;
+     * boundary=...
+     */
+
+    if (token) {
+
+      headers =
+        headers.set(
+          'Authorization',
+          `Bearer ${token}`
+        );
+
+    }
+
+    const request =
+      this.http.post<T>(
+
+        `${this.baseUrl}${path}`,
+
+        formData,
+
+        {
+          headers
+        }
+
+      );
+
+    return showLoading
+      ? this.track(request)
+      : request;
+
+  }
+
+  // =====================================================
   // PUT
-  // =========================
+  // =====================================================
 
   put<T>(
     path: string,
-    body: any
+    body: any,
+    showLoading: boolean = true
   ): Observable<T> {
 
-    return this.http.put<T>(
-      `${this.baseUrl}${path}`,
-      body,
-      {
-        headers: this.headers()
-      }
-    );
+    const request =
+      this.http.put<T>(
+
+        `${this.baseUrl}${path}`,
+
+        body,
+
+        {
+          headers:
+            this.headers()
+        }
+
+      );
+
+    return showLoading
+      ? this.track(request)
+      : request;
+
   }
 
-  // =========================
+  // =====================================================
   // DELETE
-  // =========================
+  // =====================================================
 
   delete<T>(
-    path: string
+    path: string,
+    showLoading: boolean = true
   ): Observable<T> {
 
-    return this.http.delete<T>(
-      `${this.baseUrl}${path}`,
-      {
-        headers: this.headers()
-      }
-    );
+    const request =
+      this.http.delete<T>(
+
+        `${this.baseUrl}${path}`,
+
+        {
+          headers:
+            this.headers()
+        }
+
+      );
+
+    return showLoading
+      ? this.track(request)
+      : request;
+
   }
 
-  // =========================
+  // =====================================================
   // PATCH
-  // =========================
+  // =====================================================
 
   patch<T>(
     path: string,
-    body: any
+    body: any,
+    showLoading: boolean = true
   ): Observable<T> {
 
-    return this.http.patch<T>(
-      `${this.baseUrl}${path}`,
-      body,
-      {
-        headers: this.headers()
-      }
-    );
+    const request =
+      this.http.patch<T>(
+
+        `${this.baseUrl}${path}`,
+
+        body,
+
+        {
+          headers:
+            this.headers()
+        }
+
+      );
+
+    return showLoading
+      ? this.track(request)
+      : request;
+
   }
+
 }

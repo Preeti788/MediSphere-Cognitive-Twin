@@ -1,124 +1,86 @@
 # MediSphere — Smart Healthcare Management Platform
 
-A Java full-stack implementation aligned to the supplied MediSphere Cognitive Twin specification.
+MediSphere is a student-friendly Java + Angular healthcare management project covering four milestones:
 
-## Stack
-- Java 21 + Spring Boot 4.0.8 (project source specification targets Java 25; this build is configured for Java 21)
-- Angular 20
-- MongoDB
-- Apache Kafka
-- FHIR R4-ready REST exchange endpoints
-- SMART on FHIR authorization handshake foundation
-- JWT + role-based security
-- Digital Health Twin / Patient 360
-- Wearable vital ingestion + automatic alerts
-- Consent management
-- Explainable demo AI risk engine
-- Labs, appointments, care plans, pharmacy and audit-ready structure
-- Docker Compose + Kubernetes manifests
+- **M1:** FHIR Integration & Digital Health Twin / Patient 360
+- **M2:** Explainable cardiovascular and diabetes risk review
+- **M3:** Real-time vital monitoring and threshold-based clinical alerts
+- **M4:** Care Plan & Treatment with task progress tracking
 
-The supplied project source specifies Java 25, Spring Boot 4, Angular 20, MongoDB, Kafka, FHIR APIs/SMART on FHIR, TensorFlow Federated, Docker/Kubernetes and HIPAA Vault. The UI and backend here implement the local working foundation end-to-end; TensorFlow Federated and enterprise HIPAA Vault are represented as integration-ready boundaries rather than pretending a local demo is a production clinical AI/security deployment.
+## Technology
 
-## Run locally
+- Backend: Java 21, Spring Boot 4
+- Frontend: Angular 20
+- Database: MongoDB
+- Real-time architecture: Apache Kafka integration
+- Healthcare interoperability: FHIR-ready REST endpoints + SMART handshake
+- Security: JWT + role-based access
 
-### 1. Prerequisites
-Install:
-- JDK 21
-- Maven 3.6.3+
-- Node.js 20.19+
-- Angular CLI 20
-- Docker Desktop (recommended for MongoDB + Kafka)
+## Run in VS Code
 
-### 2. Start infrastructure
-From this folder:
-```bash
-docker compose up -d
+### 1. Start MongoDB
+
+Open Terminal 1:
+
+```powershell
+mongod --dbpath C:\data\db
 ```
 
-### 3. Start Java backend
-```bash
+Keep this terminal running.
+
+### 2. Start the backend
+
+Open Terminal 2:
+
+```powershell
 cd backend
-mvn clean spring-boot:run
+mvn spring-boot:run
 ```
-Backend: http://localhost:8080
 
-### 4. Start Angular
-Open a second terminal:
-```bash
+Backend runs on `http://localhost:8080`.
+
+### 3. Start the Angular frontend
+
+Open Terminal 3:
+
+```powershell
 cd frontend
 npm install
 npm start
 ```
-Frontend: http://localhost:4200
 
-## Demo logins
-- Admin: admin@medisphere.local / Admin@123
-- Doctor: doctor@medisphere.local / Doctor@123
-- Nurse: nurse@medisphere.local / Nurse@123
-- Receptionist: reception@medisphere.local / Reception@123
-- Pharmacist: pharmacist@medisphere.local / Pharmacy@123
-- Patient: patient@medisphere.local / Patient@123
+Frontend opens at `http://localhost:4200`.
 
-## Working flows
-1. Open the UI → Login page.
-2. Login creates a JWT and opens the clinical workspace.
-3. Dashboard loads real MongoDB counts.
-4. Patients → Patient 360 loads vitals, labs, appointments, alerts, care plans and consent.
-5. Record wearable vital → persists to MongoDB, publishes a Kafka event and evaluates abnormal thresholds.
-6. Clinical Alerts → acknowledge alerts.
-7. Consent → update and persist patient data-sharing permissions.
-8. AI Risk → transparent rule-based demo score with contributing factors.
-9. FHIR / SMART → inspect CapabilityStatement and authorization handshake.
-10. Pharmacy / Appointments → read and create operational records.
+> Docker/Kafka are integration options. The basic local demo works with MongoDB + Spring Boot + Angular.
 
-## Important clinical note
-The AI risk endpoint is a transparent demonstration engine, not a medically validated model and must not be used for diagnosis or treatment decisions. TensorFlow Federated/SHAP can be connected behind the AI service boundary for a real research/production model.
+## Demo login
 
-## Project structure
-backend/     Spring Boot API
-frontend/    Angular 20 UI
-k8s/         Kubernetes manifests
-docker-compose.yml
-docs/        supporting project notes
+The backend seeds these presentation accounts on startup (and updates the demo credentials if the account already exists):
 
+| Username | Password | Role |
+|---|---|---|
+| `siya` | `Siya@2026` | Receptionist |
+| `aarav.mehta` | `Aarav@2026` | Doctor |
+| `neha.nurse` | `Nurse@2026` | Nurse |
+| `clinic.admin` | `Clinic@2026` | Admin |
 
-## Frontend/backend connection
-The Angular client uses `http://localhost:8080/api`. Spring Security includes an explicit CORS configuration for `http://localhost:4200` and `http://127.0.0.1:4200`. After a successful login, the JWT is stored as `medisphere_token` and the application opens `/app`.
+The login screen accepts either the username or the email address.
 
-## Milestone 3 – Real-Time Monitoring & Alerts
-The Live Monitoring screen demonstrates an incoming vital-sign stream for a selected patient. Each reading is evaluated against configurable demo thresholds for heart rate, blood pressure, SpO2, temperature and glucose. Alerts store severity, observed value, threshold, timestamp, recipient team and acknowledgement state.
+## Demo data
 
-For presentation, use **Live Monitoring → Vikram Singh → Simulate HR 145 bpm** to demonstrate a critical heart-rate event. The module is a software simulation for academic demonstration; it does not claim physical medical-device connectivity or clinical validation.
+The backend seeds a small presentation dataset when the corresponding records are missing:
 
-### Risk levels used by Milestone 2
-- **LOW:** score below 40
-- **MODERATE:** score 40 to below 70
-- **HIGH:** score 70 to 100
+- Ananya Verma — Type 2 Diabetes, high-risk demo readings
+- Vikram Singh — Hypertension + Type 2 Diabetes, moderate-risk demo readings
+- Rahul Kumar — routine wellness / lower-risk demo readings
+- appointments, alerts, medicines, labs, consent and a sample M4 care plan
 
-The seeded demo patients intentionally have different clinical profiles so the AI Risk Lab can demonstrate different levels.
-## Milestone 4 – Care Plan & Treatment
-The M4 Care Plans workspace turns the existing patient context into a trackable treatment-plan demonstration. It can generate a patient-specific plan from recorded conditions, recent vitals and the latest available risk assessment, then track task completion and review the latest health readings.
+## Suggested presentation flow
 
-The current implementation is a rule-based educational care-plan workflow, not a clinically validated treatment engine. Example tasks include medication adherence, BP/glucose monitoring when relevant, healthy routine activities and follow-up.
+`Login → Dashboard → Patient 360 → M2 Risk Review → M3 Monitoring → M4 Care Plan`
 
-### M4 demo flow
-1. Open **M4 Care Plans**.
-2. Select a patient.
-3. Click **Generate care plan**.
-4. Show the goal, risk level, follow-up date and task list.
-5. Tick a few tasks to demonstrate treatment progress.
-6. Show the latest health readings and the plan history.
+For the M3 demo, select a patient in Live Monitoring and use the live simulator to generate changing test vitals. For M4, select Ananya Verma, generate the care plan, then mark tasks completed to show the progress calculation.
 
+## Scope note
 
-
-## Login
-The login screen now uses **Username or Email + Password**. Nothing is pre-filled, so the user can enter credentials manually.
-
-Demo staff accounts:
-- Username: `clinic.admin`  Password: `Care@2026`
-- Username: `doctor.arjun`  Password: `Doctor@2026`
-
-The login page also includes a **Create staff account** option for a local project account. New accounts use the `RECEPTIONIST` role for demonstration.
-
-## Dashboard UI refresh
-The dashboard has been rebuilt as a clean clinical/EHR-style workspace inspired by the supplied reference: light high-contrast layout, left navigation, search/topbar, four KPI cards, patient health overview, live heart-rate trend chart, alerts, appointments, AI risk preview, and Care Plan progress. The existing M1-M4 backend workflows remain connected to the same Angular shell.
+The AI risk module and care-plan generation are educational/demo components. They are not clinically validated diagnostic or treatment systems.

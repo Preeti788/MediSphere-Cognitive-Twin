@@ -4,6 +4,7 @@ import com.medisphere.model.Models.*;
 import com.medisphere.repo.LabRepo;
 import com.medisphere.repo.PatientRepo;
 import com.medisphere.repo.VitalRepo;
+import com.medisphere.repo.PrescriptionRepo;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,15 +19,18 @@ public class FhirController {
     private final PatientRepo patientRepo;
     private final VitalRepo vitalRepo;
     private final LabRepo labRepo;
+    private final PrescriptionRepo prescriptionRepo;
 
     public FhirController(
             PatientRepo patientRepo,
             VitalRepo vitalRepo,
-            LabRepo labRepo) {
+            LabRepo labRepo,
+            PrescriptionRepo prescriptionRepo) {
 
         this.patientRepo = patientRepo;
         this.vitalRepo = vitalRepo;
         this.labRepo = labRepo;
+        this.prescriptionRepo = prescriptionRepo;
     }
 
     // =========================================================
@@ -80,6 +84,16 @@ public class FhirController {
 
                                         Map.of(
                                                 "type", "DiagnosticReport",
+                                                "interaction",
+                                                List.of(
+                                                        Map.of("code", "read"),
+                                                        Map.of("code", "search-type"),
+                                                        Map.of("code", "create")
+                                                )
+                                        ),
+
+                                        Map.of(
+                                                "type", "MedicationRequest",
                                                 "interaction",
                                                 List.of(
                                                         Map.of("code", "read"),
@@ -577,6 +591,45 @@ public class FhirController {
         return ResponseEntity.ok(
                 toFhirDiagnosticReport(lab.get())
         );
+    }
+
+    // =========================================================
+    // FHIR MEDICATION REQUEST ↔ PRESCRIPTION
+    // =========================================================
+
+    @PostMapping("/MedicationRequest")
+    public ResponseEntity<?> createMedicationRequest(@RequestBody Map<String,Object> resource) {
+        if (!"MedicationRequest".equals(resource.get("resourceType"))) return badRequest("resourceType must be MedicationRequest");
+        String patientId = extractPatientId(resource);
+        if (patientId == null || !patientRepo.existsById(patientId)) return badRequest("MedicationRequest must reference an existing patient");
+        Prescription p = new Prescription();
+        p.patientId = patientId;
+        p.patientName = patientRepo.findById(patientId).map(x -> x.name).orElse("");
+        p.doctorName = "FHIR Practitioner";
+        p.medicineName = extractMedicationName(resource);
+        p.strength = extractMedicationStrength(resource);
+        p.dosage = extractDosage(resource);
+        p.frequency = extractDosageInstruction(resource);
+        p.instructions = extractDosageInstruction(resource);
+        p.createdAt = Instant.now();
+        Prescription saved = prescriptionRepo.save(p);
+        Map<String,Object> response = new LinkedHashMap<>(resource);
+        response.put("id", saved.id);
+        response.put("status", "active");
+        response.put("subject", Map.of("reference", "Patient/" + patientId));
+        response.put("_medisphere", Map.of("mongodbCollection", "prescriptions", "status", "STORED"));
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/MedicationRequest")
+    public List<Map<String,Object>> searchMedicationRequests(@RequestParam(required=false) String patient) {
+        List<Prescription> all = patient == null || patient.isBlank() ? prescriptionRepo.findAll() : prescriptionRepo.findByPatientIdOrderByCreatedAtDesc(patient);
+        return all.stream().map(this::toFhirMedicationRequest).toList();
+    }
+
+    @GetMapping("/MedicationRequest/{id}")
+    public ResponseEntity<?> getMedicationRequest(@PathVariable String id) {
+        return prescriptionRepo.findById(id).map(p -> ResponseEntity.ok(toFhirMedicationRequest(p))).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // =========================================================
@@ -1313,4 +1366,46 @@ public class FhirController {
 
         return result;
     }
+    @SuppressWarnings("unchecked")
+    private String extractMedicationName(Map<String,Object> r) {
+        Object mc = r.get("medicationCodeableConcept");
+        if (mc instanceof Map<?,?> m) {
+            Object text = m.get("text"); if (text != null) return text.toString();
+            Object coding = m.get("coding"); if (coding instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map<?,?> c && c.get("display") != null) return c.get("display").toString();
+        }
+        return getString(r, "medication");
+    }
+
+    private String extractMedicationStrength(Map<String,Object> r) { return ""; }
+
+    @SuppressWarnings("unchecked")
+    private String extractDosage(Map<String,Object> r) {
+        Object d = r.get("dosageInstruction");
+        if (d instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map<?,?> m) {
+            Object dose = m.get("doseAndRate");
+            if (dose instanceof List<?> dl && !dl.isEmpty() && dl.get(0) instanceof Map<?,?> dm) {
+                Object dq = dm.get("doseQuantity");
+                if (dq instanceof Map<?,?> q) { Object value=q.get("value"); Object unit=q.get("unit"); return String.valueOf(value == null ? "" : value) + (unit == null ? "" : " " + unit); }
+            }
+        }
+        return "";
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractDosageInstruction(Map<String,Object> r) {
+        Object d = r.get("dosageInstruction");
+        if (d instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map<?,?> m) return String.valueOf(m.get("text") == null ? "" : m.get("text"));
+        return "";
+    }
+
+    private Map<String,Object> toFhirMedicationRequest(Prescription p) {
+        Map<String,Object> out = new LinkedHashMap<>();
+        out.put("resourceType", "MedicationRequest"); out.put("id", p.id); out.put("status", "active"); out.put("intent", "order");
+        out.put("subject", Map.of("reference", "Patient/" + p.patientId, "display", p.patientName == null ? "" : p.patientName));
+        out.put("medicationCodeableConcept", Map.of("text", (p.medicineName == null ? "" : p.medicineName) + (p.strength == null || p.strength.isBlank() ? "" : " " + p.strength)));
+        out.put("dosageInstruction", List.of(Map.of("text", p.instructions == null ? "" : p.instructions)));
+        out.put("authoredOn", p.createdAt == null ? Instant.now().toString() : p.createdAt.toString());
+        return out;
+    }
+
 }
