@@ -47,7 +47,7 @@ import { Router } from '@angular/router';
       </div>
 
       <div class="milestone-strip">
-        <button [class.active]="tab==='dashboard' || tab==='patient360' || tab==='patients'" (click)="navigateTo('dashboard')">M1 <span>Foundation</span></button>
+        <button [class.active]="tab==='patient360' || tab==='patients'" (click)="navigateTo('patient360')">M1 <span>Foundation</span></button>
         <button [class.active]="tab==='aiRisk'" (click)="navigateTo('aiRisk')">M2 <span>AI Risk</span></button>
         <button [class.active]="tab==='monitoring' || tab==='vitals'" (click)="navigateTo('monitoring')">M3 <span>Monitoring</span></button>
         <button [class.active]="tab==='careplans'" (click)="navigateTo('careplans')">M4 <span>Care Plan</span></button>
@@ -79,406 +79,75 @@ import { Router } from '@angular/router';
 
 
     <!-- ================================================= -->
-    <!-- DASHBOARD -->
+    <!-- DASHBOARD: OVERVIEW ONLY -->
     <!-- ================================================= -->
 
-    <section
-      *ngIf="tab==='dashboard'"
-      class="content">
-
+    <section *ngIf="tab==='dashboard'" class="content dashboard-overview-only">
       <div class="hero">
-
         <div>
-
-          <span class="eyebrow">
-            DIGITAL HEALTH PLATFORM
-          </span>
-
-          <h2>
-            Patient care, connected.
-          </h2>
-
-          <p>
-            FHIR-ready data exchange, Digital Health Twin,
-            real-time vitals and clinical workflows in one place.
-          </p>
-
+          <span class="eyebrow">MEDISPHERE · CLINICAL WORKSPACE</span>
+          <h2>Patient care, connected.</h2>
+          <p>Use the dashboard for a quick overview. Open each milestone to view its own working module.</p>
         </div>
-
-        <div class="hero-icon">
-          ♥
-        </div>
-
+        <div class="hero-icon">♥</div>
       </div>
 
-
-      <div class="cards">
-
-        <div class="metric">
-
-          <span>
-            Patients
-          </span>
-
-          <b>
-            {{dash.patients}}
-          </b>
-
-          <small>
-            Registered records
-          </small>
-
-        </div>
-
-
-        <div class="metric">
-
-          <span>
-            Appointments
-          </span>
-
-          <b>
-            {{dash.appointments}}
-          </b>
-
-          <small>
-            Across care teams
-          </small>
-
-        </div>
-
-
-        <div class="metric warn">
-
-          <span>
-            Active alerts
-          </span>
-
-          <b>
-            {{dash.activeAlerts}}
-          </b>
-
-          <small>
-            Needs attention
-          </small>
-
-        </div>
-
-
-        <div class="metric">
-          <span>Medicines</span>
-          <b>{{dash.medicines}}</b>
-          <small>Pharmacy inventory</small>
-        </div>
-
-        <div class="metric care-metric">
-          <span>Care plans</span>
-          <b>{{dash.carePlans || 0}}</b>
-          <small>M4 treatment workflows</small>
-        </div>
-
+      <div class="cards dashboard-kpis">
+        <div class="metric"><span>Patients</span><b>{{dash.patients}}</b><small>Registered records</small></div>
+        <div class="metric"><span>Appointments</span><b>{{dash.appointments}}</b><small>Across care teams</small></div>
+        <div class="metric warn"><span>Active alerts</span><b>{{dash.activeAlerts}}</b><small>Needs attention</small></div>
+        <div class="metric"><span>Medicines</span><b>{{dash.medicines}}</b><small>Pharmacy inventory</small></div>
       </div>
 
-      <div class="dashboard-reference">
-        <div class="ref-card">
-          <div class="ref-head"><div><span>LIVE MONITORING</span><h3>Live Patient Monitoring</h3></div><span>● LIVE</span></div>
-          <div class="ecg-wrap">
-            <div class="ecg-box">
-              <svg class="ecg-line" viewBox="0 0 900 160" preserveAspectRatio="none"><polyline fill="none" points="0,82 45,82 58,82 68,58 76,126 88,82 125,82 138,68 148,82 188,82 200,82 212,50 220,126 233,82 270,82 285,65 296,82 345,82 358,52 366,125 378,82 422,82 438,68 450,82 495,82 507,48 516,126 528,82 566,82 580,66 592,82 640,82 652,52 660,126 672,82 720,82 735,65 747,82 790,82 804,50 814,126 826,82 900,82"/></svg>
-              <div class="ecg-scan" *ngIf="monitoringLive"></div>
-            </div>
-            <div class="ecg-stats">
-              <div class="ecg-stat"><small>Heart Rate</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.heartRate || 78}} <em>bpm</em></b></div>
-              <div class="ecg-stat"><small>SpO₂</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.oxygen || 98}} <em>%</em></b></div>
-              <div class="ecg-stat"><small>Blood Pressure</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.systolic || 122}}/{{monitorOverview?.patientSnapshots?.[0]?.latest?.diastolic || 80}} <em>mmHg</em></b></div>
-              <div class="ecg-stat"><small>Glucose</small><b>{{monitorOverview?.patientSnapshots?.[0]?.latest?.glucose || 108}} <em>mg/dL</em></b></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="ref-card">
-          <div class="ref-head"><div><span>AI RISK</span><h3>AI Risk Overview</h3></div><span>EDUCATIONAL</span></div>
-          <div class="risk-body">
-            <div class="risk-ring"><b>{{risk?.cardiovascular?.score || 24}}%</b><span>{{risk?.cardiovascular?.level || 'Low Risk'}}</span></div>
-            <div><div class="factor"><div class="factor-row"><span>Age</span><b>35%</b></div><div class="factor-bar"><i style="width:35%"></i></div></div><div class="factor"><div class="factor-row"><span>Blood pressure</span><b>28%</b></div><div class="factor-bar"><i style="width:28%"></i></div></div><div class="factor"><div class="factor-row"><span>Glucose</span><b>20%</b></div><div class="factor-bar"><i style="width:20%"></i></div></div><div class="factor"><div class="factor-row"><span>Health history</span><b>17%</b></div><div class="factor-bar"><i style="width:17%"></i></div></div></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ref-lower">
-        <div class="ref-card ref-table"><div class="ref-head"><div><span>CLINICAL ALERTS</span><h3>Recent Alerts</h3></div><button type="button" (click)="navigateTo('alerts')">View all</button></div><table><thead><tr><th>Time</th><th>Patient</th><th>Message</th><th>Status</th></tr></thead><tbody><tr *ngFor="let a of alerts | slice:0:4"><td>{{a.createdAt | date:'shortTime'}}</td><td>{{patientName(a.patientId)}}</td><td>{{a.message}}</td><td><span [ngClass]="{'status-critical':a.severity==='CRITICAL','status-warning':a.severity==='WARNING','status-ok':a.severity==='INFO'}">{{a.severity}}</span></td></tr></tbody></table></div>
-        <div class="ref-card ref-table"><div class="ref-head"><div><span>APPOINTMENTS</span><h3>Today’s Appointments</h3></div><button type="button" (click)="navigateTo('appointments')">View all</button></div><table><thead><tr><th>Time</th><th>Patient</th><th>Type</th><th>Status</th></tr></thead><tbody><tr *ngFor="let a of appointments | slice:0:4"><td>{{a.time}}</td><td>{{a.patientName}}</td><td>{{a.reason || a.specialty}}</td><td><span class="status-ok">{{a.status}}</span></td></tr></tbody></table></div>
-      </div>
-
-      <div class="ref-card care-strip" style="margin-top:14px"><div class="ref-head" style="padding:0 0 8px"><div><span>CARE PLAN</span><h3>Care Plan Progress</h3></div><button type="button" (click)="navigateTo('careplans')">Open M4</button></div><div class="progress-track"><span [style.width.%]="83"></span></div><div class="care-meta"><span>Diabetes Management Plan · Next review {{carePlans?.[0]?.followUpDate || '—'}}</span><b>83% complete</b></div></div>
-
-      <div class="panel analytics-command-panel">
-        <div class="panel-head"><div><span class="card-kicker">OPERATIONS INTELLIGENCE</span><h3>System analytics</h3><p>Live aggregate signals across the clinical workspace.</p></div><button (click)="loadClinicalAnalytics()">↻ Sync analytics</button></div>
-        <div class="analytics-strip"><div><span>Patients</span><b>{{clinicalAnalytics?.patients || 0}}</b></div><div><span>Prescriptions</span><b>{{clinicalAnalytics?.prescriptions || 0}}</b></div><div><span>Medication events</span><b>{{clinicalAnalytics?.medicationEvents || 0}}</b></div><div><span>Low stock</span><b class="warn-number">{{clinicalAnalytics?.lowStock || 0}}</b></div><div><span>Documents</span><b>{{clinicalAnalytics?.documents || 0}}</b></div></div>
-      </div>
-
-      <div class="command-grid">
-        <div class="panel command-panel">
-          <div class="panel-head"><div><h3>Patient command center</h3><p>Jump directly into live clinical workflows.</p></div><span class="command-status">{{patients.length}} records</span></div>
-          <div class="patient-quick" *ngFor="let p of patients | slice:0:4" (click)="selectPatient(p)">
-            <div class="avatar">{{(p.name || 'P').charAt(0)}}</div><div><b>{{p.name}}</b><small>{{p.mrn}} · {{p.conditions?.length || 0}} conditions</small></div><span>›</span>
-          </div>
-        </div>
-        <div class="panel command-panel">
-          <div class="panel-head"><div><h3>Care orchestration</h3><p>M4 treatment workflow connected to M2 risk.</p></div><button type="button" (click)="navigateTo('careplans')">Open M4</button></div>
-          <div class="orchestration"><div><b>{{dash.carePlans || 0}}</b><small>care plans</small></div><div><b>{{dash.activeAlerts || 0}}</b><small>active alerts</small></div><div><b>{{dash.appointments || 0}}</b><small>appointments</small></div></div>
-          <p class="command-note">Generate a personalized demo plan from a selected patient's latest vitals, labs and M2 risk factors, then track progress and adherence.</p>
-        </div>
-      </div>
-
-
-
-      <!-- STYLE 4 ANALYTICS FIGURES -->
-      <div class="style4-analytics-grid">
-        <div class="panel analytics-panel">
-          <div class="analytics-heading">
-            <div>
-              <span class="eyebrow">CLINICAL ACTIVITY</span>
-              <h3>Platform activity overview</h3>
-              <p>Live totals already loaded from the MediSphere dashboard data.</p>
-            </div>
-            <span class="analytics-live"><i></i> LIVE DATA</span>
-          </div>
-
-          <div class="bar-chart">
-            <div class="bar-row">
-              <div class="bar-label"><span>Patients</span><b>{{dash.patients || 0}}</b></div>
-              <div class="bar-track"><span [style.width.%]="dashboardBarWidth(dash.patients)"></span></div>
-            </div>
-            <div class="bar-row">
-              <div class="bar-label"><span>Appointments</span><b>{{dash.appointments || 0}}</b></div>
-              <div class="bar-track"><span [style.width.%]="dashboardBarWidth(dash.appointments)"></span></div>
-            </div>
-            <div class="bar-row">
-              <div class="bar-label"><span>Active alerts</span><b>{{dash.activeAlerts || 0}}</b></div>
-              <div class="bar-track alert-track"><span [style.width.%]="dashboardBarWidth(dash.activeAlerts)"></span></div>
-            </div>
-            <div class="bar-row">
-              <div class="bar-label"><span>Care plans</span><b>{{dash.carePlans || 0}}</b></div>
-              <div class="bar-track care-track"><span [style.width.%]="dashboardBarWidth(dash.carePlans)"></span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel architecture-panel">
-          <div class="analytics-heading">
-            <div>
-              <span class="eyebrow">DIGITAL CARE PIPELINE</span>
-              <h3>Connected clinical workflow</h3>
-            </div>
-          </div>
-          <div class="workflow-figure">
-            <svg viewBox="0 0 620 170" role="img" aria-label="MediSphere clinical workflow">
-              <defs>
-                <linearGradient id="msFlow" x1="0" x2="1">
-                  <stop offset="0%" stop-color="#13a88f"/>
-                  <stop offset="100%" stop-color="#4478d8"/>
-                </linearGradient>
-              </defs>
-              <path class="flow-line" d="M70 85 H550"/>
-              <circle class="flow-node" cx="70" cy="85" r="28"/>
-              <circle class="flow-node" cx="190" cy="85" r="28"/>
-              <circle class="flow-node" cx="310" cy="85" r="28"/>
-              <circle class="flow-node" cx="430" cy="85" r="28"/>
-              <circle class="flow-node" cx="550" cy="85" r="28"/>
-              <circle class="flow-pulse" cx="70" cy="85" r="7"/>
-              <circle class="flow-pulse" cx="190" cy="85" r="7"/>
-              <circle class="flow-pulse" cx="310" cy="85" r="7"/>
-              <circle class="flow-pulse" cx="430" cy="85" r="7"/>
-              <circle class="flow-pulse" cx="550" cy="85" r="7"/>
-              <text x="70" y="137" text-anchor="middle">Patient</text>
-              <text x="190" y="137" text-anchor="middle">Twin</text>
-              <text x="310" y="137" text-anchor="middle">AI Risk</text>
-              <text x="430" y="137" text-anchor="middle">Monitor</text>
-              <text x="550" y="137" text-anchor="middle">Care Plan</text>
-            </svg>
-          </div>
-          <div class="workflow-caption"><span>●</span> Data flows through the M1 → M2 → M3 → M4 clinical workflow.</div>
-        </div>
-      </div>
-
-      <div class="panel registry-panel">
-        <div class="analytics-heading">
+      <div class="panel dashboard-purpose-card">
+        <div class="panel-head">
           <div>
-            <span class="eyebrow">PATIENT REGISTRY</span>
-            <h3>Recent patient records</h3>
-            <p>Quick access to existing patient records. Selecting a row opens Patient 360.</p>
+            <span class="card-kicker">MILESTONE WORKSPACE</span>
+            <h3>Open the module you need</h3>
+            <p>Each milestone has its own page. The dashboard does not contain the detailed M1, M2, M3 or M4 outputs.</p>
           </div>
-          <button type="button" class="table-link" (click)="navigateTo('patients')">View all patients →</button>
         </div>
-        <div class="table-wrap">
-          <table class="style4-table">
-            <thead>
-              <tr><th>Patient</th><th>MRN</th><th>Condition</th><th>Blood</th><th>Clinical status</th><th></th></tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let p of patients | slice:0:5" (click)="selectPatient(p)">
-                <td><div class="table-patient"><span>{{(p.name || 'P').charAt(0)}}</span><div><b>{{p.name}}</b><small>{{p.gender || '—'}}</small></div></div></td>
-                <td><code>{{p.mrn}}</code></td>
-                <td>{{p.conditions?.[0] || 'No condition recorded'}}</td>
-                <td>{{p.bloodGroup || '—'}}</td>
-                <td><span class="table-status"><i></i> Record available</span></td>
-                <td><button type="button" class="row-open" (click)="$event.stopPropagation(); selectPatient(p)">Open 360</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="empty-table" *ngIf="!patients.length">No patient records loaded.</div>
+        <div class="dashboard-module-grid">
+          <button type="button" class="dashboard-module-card" (click)="navigateTo('patient360')">
+            <span class="module-badge m1">M1</span>
+            <div><h3>Patient 360 & Digital Twin</h3><p>FHIR, patient profile, vitals, labs and consent.</p></div>
+            <b>Open M1 →</b>
+          </button>
+          <button type="button" class="dashboard-module-card" (click)="navigateTo('aiRisk')">
+            <span class="module-badge m2">M2</span>
+            <div><h3>AI Risk Prediction</h3><p>Cardiovascular and diabetes risk with explanations.</p></div>
+            <b>Open M2 →</b>
+          </button>
+          <button type="button" class="dashboard-module-card" (click)="navigateTo('monitoring')">
+            <span class="module-badge m3">M3</span>
+            <div><h3>Live Monitoring</h3><p>Vitals, trends, thresholds and clinical alerts.</p></div>
+            <b>Open M3 →</b>
+          </button>
+          <button type="button" class="dashboard-module-card" (click)="navigateTo('careplans')">
+            <span class="module-badge m4">M4</span>
+            <div><h3>Care Plan & Treatment</h3><p>Personalized actions, adherence and progress.</p></div>
+            <b>Open M4 →</b>
+          </button>
         </div>
       </div>
 
-      <div class="grid2">
-
+      <div class="dashboard-two-col">
         <div class="panel">
-
-          <h3>
-            Platform workflow
-          </h3>
-
-          <div class="flow">
-
-            <span>
-              Patient Data
-            </span>
-
-            <i>→</i>
-
-            <span>
-              FHIR
-            </span>
-
-            <i>→</i>
-
-            <span>
-              MongoDB
-            </span>
-
-            <i>→</i>
-
-            <span>
-              Digital Twin
-            </span>
-
-            <i>→</i>
-
-            <span>
-              Patient 360
-            </span>
-
+          <div class="panel-head"><div><span class="card-kicker">TODAY</span><h3>Quick clinical summary</h3></div></div>
+          <div class="dashboard-summary-list">
+            <div><span>Patients requiring attention</span><b>{{dash.activeAlerts || 0}}</b></div>
+            <div><span>Appointments scheduled</span><b>{{dash.appointments || 0}}</b></div>
+            <div><span>Care plans available</span><b>{{dash.carePlans || 0}}</b></div>
           </div>
-
         </div>
-
-
         <div class="panel">
-
-          <h3>
-            AI risk engine
-          </h3>
-
-          <p>
-            Explainable demo risk scoring is available
-            from a patient profile. It is not a medical diagnosis.
-          </p>
-
-        </div>
-
-      </div>
-
-    </section>
-
-    <!-- ================================================= -->
-    <!-- M4 CARE PLAN & TREATMENT -->
-    <!-- ================================================= -->
-    <section *ngIf="tab==='careplans'" class="content careplans-page">
-      <div class="care-hero"><div><span class="eyebrow">MILESTONE 4 · CARE PLAN & TREATMENT</span><h2>Personalized care, tracked end-to-end.</h2><p>Manage goals, treatment actions, adherence, progress, review dates and treatment status for the selected patient.</p></div><div class="care-hero-stat"><b>{{carePlans.length}}</b><span>Plans for selected patient</span><small *ngIf="carePlans.length">{{careActiveCount()}} active · {{careCompletedCount()}} completed</small></div></div>
-      <div class="care-toolbar panel"><div class="care-patient-select"><label>Patient</label><select [(ngModel)]="carePlanPatientId" (change)="loadCarePlans()"><option value="">Select a patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select></div><div class="care-actions"><button type="button" (click)="loadCarePlans()" [disabled]="!carePlanPatientId || carePlanBusy">↻ Refresh</button><button type="button" class="primary" (click)="generateCarePlan()" [disabled]="!carePlanPatientId || carePlanBusy">{{carePlanBusy ? 'Working…' : '✦ Generate from AI Risk'}}</button><button type="button" (click)="openCarePlanForm()" [disabled]="!carePlanPatientId || carePlanBusy">+ New Care Plan</button></div></div>
-      <div class="care-empty panel" *ngIf="!carePlanPatientId"><div class="empty-icon">✚</div><h3>Select a patient to manage M4 care</h3><p>The treatment plan stays linked to the patient record, M2 risk output and MongoDB-backed care-plan API.</p></div>
-      <div class="care-summary-grid" *ngIf="carePlanPatientId"><div class="care-summary-card"><span>Active plans</span><b>{{careActiveCount()}}</b><small>Currently being managed</small></div><div class="care-summary-card"><span>Average progress</span><b>{{careAverageProgress()}}%</b><small>Across selected patient's plans</small></div><div class="care-summary-card"><span>Adherence</span><b>{{careAverageAdherence()}}%</b><small>Current reported adherence</small></div><div class="care-summary-card"><span>Review due</span><b>{{careDueCount()}}</b><small>Due or overdue plans</small></div></div>
-      <div class="care-grid" *ngIf="carePlanPatientId"><article class="care-card care-card-pro" *ngFor="let cp of carePlans">
-        <div class="care-card-head"><div><span class="priority" [ngClass]="priorityClass(cp.priority)">{{cp.priority || 'MEDIUM'}}</span><span class="category">{{cp.category || 'GENERAL'}}</span></div><span class="status-pill" [ngClass]="careStatusClass(cp.status)">{{cp.status || 'ACTIVE'}}</span></div>
-        <div class="care-title-row"><div><h3>{{cp.title}}</h3><small *ngIf="cp.generatedBy">Source: {{cp.generatedBy}}</small></div><span class="review-badge" [ngClass]="careDueClass(cp)">{{careReviewLabel(cp)}}</span></div>
-        <div class="care-goal-box"><span>CARE GOAL</span><p>{{cp.goal}}</p></div>
-        <div class="care-progress-block"><div class="progress-row"><span>Overall progress</span><b>{{cp.progress || 0}}%</b></div><div class="progress-track"><span [style.width.%]="cp.progress || 0"></span></div><div class="progress-quick"><button type="button" (click)="changeCareProgress(cp,-10)" [disabled]="carePlanBusy">−10%</button><button type="button" (click)="changeCareProgress(cp,10)" [disabled]="carePlanBusy">+10%</button></div></div>
-        <div class="care-metrics-row"><div><span>Adherence</span><b>{{cp.adherence || 0}}%</b></div><div><span>Treatment actions</span><b>{{completedActionCount(cp)}}/{{(cp.actions || []).length}}</b></div><div><span>Next review</span><b>{{cp.followUpDate || '—'}}</b></div></div>
-        <div class="treatment-actions-box"><div class="treatment-head"><div><b>Treatment plan</b><small>Mark each action completed to update progress.</small></div><button type="button" (click)="openCarePlanForm(cp)">Edit plan</button></div><label class="treatment-action" *ngFor="let action of cp.actions || []"><input type="checkbox" [checked]="actionDone(action)" (change)="toggleTreatmentAction(cp, action)"><span [class.done-action]="actionDone(action)">{{actionLabel(action)}}</span></label><div class="no-actions" *ngIf="!(cp.actions || []).length">No treatment actions recorded. Edit the plan to add actions.</div></div>
-        <div class="care-quick-actions"><button type="button" (click)="changeCareAdherence(cp,-5)" [disabled]="carePlanBusy">Adherence −5</button><button type="button" (click)="changeCareAdherence(cp,5)" [disabled]="carePlanBusy">Adherence +5</button><button type="button" (click)="setCareStatus(cp,'ACTIVE')" [disabled]="carePlanBusy || cp.status==='ACTIVE'">Start</button><button type="button" (click)="setCareStatus(cp,'ON_HOLD')" [disabled]="carePlanBusy || cp.status==='ON_HOLD'">Pause</button><button type="button" class="complete-plan-btn" (click)="setCareStatus(cp,'COMPLETED')" [disabled]="carePlanBusy || cp.status==='COMPLETED'">Complete</button></div>
-        <div class="care-card-footer"><button type="button" (click)="openCarePlanForm(cp)">Edit details</button><button type="button" class="danger-btn" (click)="deleteCarePlan(cp)">Delete</button></div>
-      </article></div>
-      <div class="care-empty panel" *ngIf="carePlanPatientId && !carePlans.length"><div class="empty-icon">✓</div><h3>No care plan yet</h3><p>Generate a personalized demo plan from the patient's M2 risk data or create a plan manually.</p></div>
-    </section>
-
-    <!-- ================================================= -->
-    <!-- M3 LIVE MONITORING -->
-    <!-- ================================================= -->
-
-    <section *ngIf="tab==='monitoring'" class="content">
-      <div class="monitor-hero">
-        <div>
-          <span class="eyebrow">MILESTONE 3 · REAL-TIME CLINICAL MONITORING</span>
-          <h2>Live patient monitoring</h2>
-          <p>Continuous vital-sign visibility with automatic threshold detection and persistent clinical alerts.</p>
-        </div>
-        <div class="monitor-live"><span class="pulse-dot"></span> LIVE <small>{{monitoringUpdated | date:'mediumTime'}}</small></div>
-      </div>
-
-      <div class="cards">
-        <div class="metric"><span>Patients monitored</span><b>{{monitorOverview.patientsMonitored || 0}}</b><small>With recorded vital streams</small></div>
-        <div class="metric danger"><span>Critical alerts</span><b>{{monitorOverview.criticalAlerts || 0}}</b><small>Immediate attention</small></div>
-        <div class="metric warn"><span>Warning alerts</span><b>{{monitorOverview.warningAlerts || 0}}</b><small>Threshold exceeded</small></div>
-        <div class="metric"><span>Stream status</span><b class="live-text">{{monitoringLive ? 'ONLINE' : 'SYNCING'}}</b><small>Auto refresh every 5 seconds</small></div>
-      </div>
-
-      <div class="monitor-grid">
-        <div class="panel">
-          <div class="panel-head"><div><h3>Patient streams</h3><p>Latest values from MongoDB vital history.</p></div><button (click)="loadMonitoring()">↻ Sync now</button></div>
-          <div class="monitor-patient" *ngFor="let m of monitorOverview.patientSnapshots" [class.selected-monitor]="monitorPatientId===m.patientId" (click)="selectMonitorPatient(m.patientId)">
-            <div class="status-dot" [ngClass]="monitorStatusClass(m.status)"></div>
-            <div class="monitor-patient-main"><b>{{patientName(m.patientId)}}</b><small>MRN {{patientMrn(m.patientId)}} · {{m.updatedAt | date:'short'}}</small></div>
-            <span class="status-pill" [ngClass]="monitorStatusClass(m.status)">{{m.status}}</span>
-            <span class="alert-count" *ngIf="m.activeAlerts">{{m.activeAlerts}} alert{{m.activeAlerts>1?'s':''}}</span>
+          <div class="panel-head"><div><span class="card-kicker">PATIENT CONTEXT</span><h3>Selected patient</h3></div></div>
+          <div class="dashboard-selected-patient" *ngIf="selected?.patient; else noDashboardPatient">
+            <div class="avatar">{{(selected.patient.name || 'P').charAt(0)}}</div>
+            <div><b>{{selected.patient.name}}</b><small>{{selected.patient.mrn}} · {{selected.patient.gender || 'Gender —'}}</small></div>
+            <button type="button" (click)="navigateTo('patient360')">Open Patient 360</button>
           </div>
-          <div class="empty" *ngIf="!monitorOverview.patientSnapshots?.length">No vital streams yet. Open a patient and record a wearable vital.</div>
-        </div>
-
-        <div class="panel" *ngIf="monitorPatient as mp">
-          <div class="panel-head"><div><h3>{{patientName(mp.patientId)}} · Live vitals</h3><p>Patient-specific monitoring view</p></div><div class="monitor-actions"><button (click)="loadMonitorPatient(mp.patientId)">↻ Refresh</button><button class="live-demo-btn" [class.running]="simulationRunning" (click)="toggleLiveSimulation()">{{simulationRunning ? '■ Stop Live Demo' : '▶ Start Live Demo'}}</button></div></div>
-          <div class="vital-grid">
-            <div class="live-vital"><span>Heart Rate</span><b>{{mp.latest?.heartRate ?? '—'}}</b><small>bpm</small><em [ngClass]="monitorStatusClass(valueStatus('heartRate',mp.latest?.heartRate))">{{valueStatus('heartRate',mp.latest?.heartRate)}}</em></div>
-            <div class="live-vital"><span>SpO₂</span><b>{{mp.latest?.oxygen ?? '—'}}</b><small>%</small><em [ngClass]="monitorStatusClass(valueStatus('oxygen',mp.latest?.oxygen))">{{valueStatus('oxygen',mp.latest?.oxygen)}}</em></div>
-            <div class="live-vital"><span>Blood Pressure</span><b>{{mp.latest?.systolic ?? '—'}} / {{mp.latest?.diastolic ?? '—'}}</b><small>mmHg</small><em [ngClass]="monitorStatusClass(valueStatus('bp',mp.latest))">{{valueStatus('bp',mp.latest)}}</em></div>
-            <div class="live-vital"><span>Glucose</span><b>{{mp.latest?.glucose ?? '—'}}</b><small>mg/dL</small><em [ngClass]="monitorStatusClass(valueStatus('glucose',mp.latest?.glucose))">{{valueStatus('glucose',mp.latest?.glucose)}}</em></div>
-            <div class="live-vital"><span>Temperature</span><b>{{mp.latest?.temperature ?? '—'}}</b><small>°C</small><em [ngClass]="monitorStatusClass(valueStatus('temperature',mp.latest?.temperature))">{{valueStatus('temperature',mp.latest?.temperature)}}</em></div>
-          </div>
-
-          <h4>Vital trend</h4>
-          <div class="trend-tabs"><button *ngFor="let k of trendKeys" [class.active]="trendKey===k" (click)="trendKey=k">{{k}}</button></div>
-          <div class="trend-chart live-chart" *ngIf="trendPoints().length">
-            <div class="chart-live-badge"><span class="pulse-dot"></span>{{simulationRunning ? 'LIVE STREAMING' : 'LIVE MONITOR'}}</div>
-            <div class="chart-sweep" *ngIf="simulationRunning"></div>
-            <svg viewBox="0 0 640 190" preserveAspectRatio="none">
-              <polyline [attr.points]="trendPolyline()" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
-            </svg>
-            <div class="chart-labels"><span>{{trendMin()}}</span><b>{{trendKey}}</b><span>{{trendMax()}}</span></div>
-          </div>
-          <div class="empty" *ngIf="!trendPoints().length">No trend data available.</div>
-          <div class="stream-note"><b>Demo wearable stream:</b> Start Live Demo to generate changing test vitals through the same <code>/vitals</code> API. These readings are simulated and are not real patient measurements.</div>
-
-          <h4>Recent alerts</h4>
-          <div class="monitor-alert" *ngFor="let a of $any(mp.alerts) | slice:0:5">
-            <span class="status-pill" [ngClass]="monitorStatusClass($any(a).severity)">{{$any(a).severity}}</span><div><b>{{$any(a).message}}</b><small>{{$any(a).createdAt | date:'medium'}}</small></div>
-            <button *ngIf="!$any(a).acknowledged" (click)="ack($any(a).id); loadMonitorPatient(mp.patientId)">Acknowledge</button>
-          </div>
-        </div>
-
-        <div class="panel" *ngIf="!monitorPatient">
-          <div class="panel-head"><div><h3>Monitoring controls</h3><p>Select a patient stream to inspect trends and alerts.</p></div></div>
-          <div class="monitor-info"><span>◉</span><div><b>Automatic detection enabled</b><p>Heart rate, SpO₂, blood pressure, glucose and temperature are evaluated against configured monitoring thresholds.</p></div></div>
-          <div class="monitor-info"><span>⚡</span><div><b>Kafka event channel</b><p>Vital events are published to <code>medisphere.vitals</code>. If Kafka is unavailable, the synchronous API path keeps monitoring functional.</p></div></div>
+          <ng-template #noDashboardPatient><div class="empty">Select a patient from Patients to start the milestone workflow.</div></ng-template>
         </div>
       </div>
     </section>
@@ -1538,6 +1207,66 @@ import { Router } from '@angular/router';
 
     </section>
 
+
+    <!-- ================================================= -->
+    <!-- M2 AI RISK - SEPARATE MODULE -->
+    <!-- ================================================= -->
+    <section *ngIf="tab==='aiRisk'" class="content milestone-page m2-page">
+      <div class="module-hero">
+        <div><span class="eyebrow">M2 · WEEKS 3–4</span><h2>AI Risk Prediction</h2><p>Run cardiovascular and diabetes risk analysis for the selected patient.</p></div>
+        <div class="module-status">● M2 READY</div>
+      </div>
+      <div class="module-toolbar">
+        <div><span class="card-kicker">SELECT PATIENT</span><h3>{{selected?.patient?.name || 'Choose a patient'}}</h3><small>{{selected?.patient?.mrn || 'Select a patient to run the prediction'}}</small></div>
+        <div class="module-controls">
+          <select [ngModel]="selected?.patient?.id || ''" (ngModelChange)="selectModulePatient($event)"><option value="">Select patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select>
+          <button class="primary" [disabled]="!selected?.patient?.id" (click)="runRisk(selected.patient.id)">Run Prediction</button>
+          <button type="button" (click)="refresh()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="risk-empty" *ngIf="!risk"><div class="risk-empty-icon">✦</div><h3>No prediction yet</h3><p>Select a patient and click <b>Run Prediction</b> to generate the M2 result.</p></div>
+      <div *ngIf="risk" class="risk-workspace">
+        <div class="risk-score-grid">
+          <div class="risk-score-card cardio"><span>Cardiovascular Risk</span><b>{{risk.cardiovascular?.score ?? '—'}}%</b><strong>{{risk.cardiovascular?.level ?? '—'}}</strong><small>{{risk.predictionHorizon || '12 months'}}</small></div>
+          <div class="risk-score-card diabetes"><span>Diabetes Risk</span><b>{{risk.diabetes?.score ?? '—'}}%</b><strong>{{risk.diabetes?.level ?? '—'}}</strong><small>{{risk.predictionHorizon || '12 months'}}</small></div>
+          <div class="risk-score-card privacy"><span>Federated Learning</span><b>{{risk.federatedLearning?.globalRiskSignal ?? '—'}}%</b><strong>{{risk.federatedLearning?.status || 'SIMULATED'}}</strong><small>Raw patient data stays local</small></div>
+          <div class="risk-score-card quality"><span>Data Quality</span><b>{{risk.dataQuality?.confidence ?? '—'}}%</b><strong>{{risk.dataQuality?.level || 'LIMITED'}}</strong><small>Available features: {{risk.dataQuality?.availableFeatures ?? '—'}}</small></div>
+        </div>
+        <div class="risk-two-col">
+          <div class="panel risk-panel"><div class="panel-head"><div><span class="card-kicker">EXPLAINABILITY</span><h3>Contributing factors</h3><p>Feature-level explanation for the prediction.</p></div></div><div class="factor-list"><div class="factor-row" *ngFor="let f of (risk.explanations || []).slice(0,8)"><div><b>{{f.feature}}</b><small>{{f.riskType || ''}} · {{f.direction || ''}}</small></div><strong>{{f.impact ?? f.importance ?? 0}}</strong></div><div class="empty-small" *ngIf="!(risk.explanations || []).length">No explanation data returned.</div></div></div>
+          <div class="panel risk-panel"><div class="panel-head"><div><span class="card-kicker">MODEL INPUTS</span><h3>Patient inputs used</h3></div></div><div class="input-grid"><div><span>Age</span><b>{{risk.inputs?.age ?? '—'}}</b></div><div><span>Heart rate</span><b>{{risk.inputs?.heartRate ?? '—'}} bpm</b></div><div><span>Blood pressure</span><b>{{risk.inputs?.systolic ?? '—'}} / {{risk.inputs?.diastolic ?? '—'}}</b></div><div><span>SpO₂</span><b>{{risk.inputs?.oxygen ?? '—'}}%</b></div><div><span>Glucose</span><b>{{risk.inputs?.glucose ?? '—'}} mg/dL</b></div><div class="wide"><span>Conditions</span><b>{{risk.inputs?.conditions || 'None recorded'}}</b></div></div></div>
+        </div>
+        <div class="panel recommendations-panel"><div class="panel-head"><div><span class="card-kicker">MODEL OUTPUT</span><h3>Recommendations for review</h3></div><span class="pill">Demo model</span></div><div class="recommendation-list"><div *ngFor="let r of (risk.recommendations || [])">• {{r}}</div><div *ngIf="!(risk.recommendations || []).length">No recommendation text returned.</div></div><small class="module-note">Academic risk demonstration; not a clinical diagnosis.</small></div>
+      </div>
+    </section>
+
+    <!-- ================================================= -->
+    <!-- M3 LIVE MONITORING - SEPARATE MODULE -->
+    <!-- ================================================= -->
+    <section *ngIf="tab==='monitoring'" class="content milestone-page m3-page">
+      <div class="module-hero"><div><span class="eyebrow">M3 · WEEKS 5–6</span><h2>Live Monitoring & Alerts</h2><p>Continuously observe patient vitals, evaluate thresholds and surface abnormal readings.</p></div><div class="module-status" [class.live-on]="simulationRunning">● {{simulationRunning ? 'LIVE STREAM' : 'MONITOR READY'}}</div></div>
+      <div class="module-toolbar"><div><span class="card-kicker">MONITOR PATIENT</span><h3>{{monitorPatientId ? patientName(monitorPatientId) : 'Choose a patient'}}</h3><small>{{patientMrn(monitorPatientId)}} · {{monitoringUpdated ? (monitoringUpdated | date:'mediumTime') : 'Waiting for data'}}</small></div><div class="module-controls"><select [ngModel]="monitorPatientId" (ngModelChange)="selectMonitorPatient($event)"><option value="">Select patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select><button type="button" class="primary" [disabled]="!monitorPatientId" (click)="toggleLiveSimulation()">{{simulationRunning ? '■ Stop Live Demo' : '▶ Start Live Demo'}}</button><button type="button" class="critical-btn" [disabled]="!monitorPatientId" (click)="loadCriticalMonitoringDemo()">Simulate HR 145</button></div></div>
+      <div class="monitor-empty" *ngIf="!monitorPatient"><div class="monitor-empty-icon">♥</div><h3>Select a patient stream</h3><p>Choose a patient above. Their latest vitals and monitoring history will appear here.</p></div>
+      <div *ngIf="monitorPatient" class="monitor-workspace">
+        <div class="monitor-vital-grid"><div class="monitor-vital"><span>Heart Rate</span><b>{{monitorPatient.latest?.heartRate ?? '—'}}</b><small>bpm</small><em [class]="valueStatus('heartRate',monitorPatient.latest?.heartRate)">{{valueStatus('heartRate',monitorPatient.latest?.heartRate)}}</em></div><div class="monitor-vital"><span>Blood Pressure</span><b>{{monitorPatient.latest?.systolic ?? '—'}} / {{monitorPatient.latest?.diastolic ?? '—'}}</b><small>mmHg</small><em [class]="valueStatus('bp',monitorPatient.latest)">{{valueStatus('bp',monitorPatient.latest)}}</em></div><div class="monitor-vital"><span>SpO₂</span><b>{{monitorPatient.latest?.oxygen ?? '—'}}</b><small>% saturation</small><em [class]="valueStatus('oxygen',monitorPatient.latest?.oxygen)">{{valueStatus('oxygen',monitorPatient.latest?.oxygen)}}</em></div><div class="monitor-vital"><span>Glucose</span><b>{{monitorPatient.latest?.glucose ?? '—'}}</b><small>mg/dL</small><em [class]="valueStatus('glucose',monitorPatient.latest?.glucose)">{{valueStatus('glucose',monitorPatient.latest?.glucose)}}</em></div><div class="monitor-vital"><span>Temperature</span><b>{{monitorPatient.latest?.temperature ?? '—'}}</b><small>°C</small><em [class]="valueStatus('temperature',monitorPatient.latest?.temperature)">{{valueStatus('temperature',monitorPatient.latest?.temperature)}}</em></div></div>
+        <div class="monitor-two-col"><div class="panel trend-panel"><div class="panel-head"><div><span class="card-kicker">LIVE TREND</span><h3>{{trendKey | titlecase}} history</h3></div><select [(ngModel)]="trendKey"><option *ngFor="let k of trendKeys" [value]="k">{{k | titlecase}}</option></select></div><svg viewBox="0 0 640 190" class="trend-chart"><line x1="10" y1="25" x2="630" y2="25"/><line x1="10" y1="95" x2="630" y2="95"/><line x1="10" y1="175" x2="630" y2="175"/><polyline *ngIf="trendPolyline()" [attr.points]="trendPolyline()" fill="none"/></svg><div class="trend-stats"><span>Min <b>{{trendMin()}}</b></span><span>Max <b>{{trendMax()}}</b></span><span>Readings <b>{{trendPoints().length}}</b></span></div></div>
+          <div class="panel alert-panel"><div class="panel-head"><div><span class="card-kicker">CLINICAL ALERTS</span><h3>Recent monitoring alerts</h3></div><span class="pill">{{monitorPatient.alerts?.length || 0}}</span></div><div class="monitor-alert" *ngFor="let a of (monitorPatient.alerts || []).slice(0,6)"><div><b>{{a.severity}}</b><span>{{a.type}}</span><p>{{a.message}}</p></div><button *ngIf="!a.acknowledged" type="button" (click)="ack(a)">Acknowledge</button></div><div class="empty-small" *ngIf="!monitorPatient.alerts?.length">No monitoring alerts.</div></div></div>
+        <div class="panel monitor-flow-panel"><div><span class="card-kicker">M3 WORKFLOW</span><h3>Observe → Evaluate → Alert → Respond</h3></div><div class="flow-steps"><span>New vital arrives</span><i>→</i><span>Threshold check</span><i>→</i><span>Status classified</span><i>→</i><span>Alert saved</span><i>→</i><span>Care team reviews</span></div><small class="module-note">Software simulation for demonstration; physical wearable connectivity is a future integration.</small></div>
+      </div>
+    </section>
+
+    <!-- ================================================= -->
+    <!-- M4 CARE PLAN - SEPARATE MODULE -->
+    <!-- ================================================= -->
+    <section *ngIf="tab==='careplans'" class="content milestone-page m4-page">
+      <div class="module-hero"><div><span class="eyebrow">M4 · WEEKS 7–8</span><h2>Care Plan & Treatment</h2><p>Create a patient-specific care plan and track progress and adherence.</p></div><div class="module-status">● M4 READY</div></div>
+      <div class="module-toolbar"><div><span class="card-kicker">CARE PATIENT</span><h3>{{carePlanPatientId ? patientName(carePlanPatientId) : 'Choose a patient'}}</h3><small>{{patientMrn(carePlanPatientId)}} · {{carePlans.length}} saved plan(s)</small></div><div class="module-controls"><select [ngModel]="carePlanPatientId" (ngModelChange)="selectCarePlanPatient($event)"><option value="">Select patient</option><option *ngFor="let p of patients" [value]="p.id">{{p.name}} · {{p.mrn}}</option></select><button type="button" class="primary" [disabled]="!carePlanPatientId || carePlanBusy" (click)="generateCarePlan()">{{carePlanBusy ? 'Generating…' : 'Generate Care Plan'}}</button><button type="button" (click)="openCarePlanForm()" [disabled]="!carePlanPatientId">+ Create Manually</button></div></div>
+      <div class="care-empty" *ngIf="!carePlans.length"><div class="care-empty-icon">✓</div><h3>No care plan for this patient</h3><p>Select a patient and click <b>Generate Care Plan</b> to create the M4 plan.</p></div>
+      <div *ngIf="carePlans.length" class="care-workspace"><div class="care-stat-grid"><div class="care-stat"><span>Active Plans</span><b>{{careActiveCount()}}</b></div><div class="care-stat"><span>Completed Plans</span><b>{{careCompletedCount()}}</b></div><div class="care-stat"><span>Average Progress</span><b>{{careAverageProgress()}}%</b></div><div class="care-stat"><span>Average Adherence</span><b>{{careAverageAdherence()}}%</b></div></div>
+        <div class="care-plan-list"><article class="panel care-plan-card" *ngFor="let cp of carePlans"><div class="care-title-row"><div><span class="card-kicker">{{cp.category || 'CARE PLAN'}}</span><h3>{{cp.title}}</h3><small>{{cp.goal}}</small></div><div class="care-badges"><span class="pill">{{cp.priority || 'MEDIUM'}}</span><span class="pill">{{cp.status || 'ACTIVE'}}</span></div></div><div class="care-progress-block"><div><span>Progress</span><b>{{cp.progress || 0}}%</b></div><div class="progress-track"><i [style.width.%]="cp.progress || 0"></i></div></div><div class="care-progress-block"><div><span>Adherence</span><b>{{cp.adherence || 0}}%</b></div><div class="progress-track adherence"><i [style.width.%]="cp.adherence || 0"></i></div></div><div class="treatment-box"><div class="treatment-head"><div><b>Treatment actions</b><small>Tick an action when completed.</small></div><span>{{completedActionCount(cp)}} / {{cp.actions?.length || 0}}</span></div><label class="treatment-action" *ngFor="let action of (cp.actions || [])" [class.done-action]="actionDone(action)"><input type="checkbox" [checked]="actionDone(action)" (change)="toggleTreatmentAction(cp,action)"><span>{{actionLabel(action)}}</span></label><div class="empty-small" *ngIf="!cp.actions?.length">No treatment actions saved.</div></div><div class="care-meta-row"><span>Follow-up <b>{{cp.followUpDate || 'Not set'}}</b></span><span>Generated by <b>{{cp.generatedBy || 'CLINICIAN'}}</b></span><span>Updated <b>{{cp.updatedAt | date:'short'}}</b></span></div><div class="care-actions"><button (click)="changeCareProgress(cp,10)">+10% Progress</button><button (click)="changeCareAdherence(cp,10)">+10% Adherence</button><button (click)="setCareStatus(cp,'COMPLETED')">Mark Completed</button><button (click)="openCarePlanForm(cp)">Edit</button><button class="danger-btn" (click)="deleteCarePlan(cp)">Delete</button></div></article></div>
+        <div class="panel care-history-panel"><div class="panel-head"><div><span class="card-kicker">PLAN HISTORY</span><h3>Previous care plans</h3></div><span class="pill">{{carePlans.length}} plan(s)</span></div><div class="history-row" *ngFor="let cp of carePlans"><div><b>{{cp.title}}</b><small>{{cp.category}} · {{cp.followUpDate || 'No follow-up'}}</small></div><span>{{cp.progress || 0}}%</span><span>{{cp.status || 'ACTIVE'}}</span></div></div>
+      </div>
+    </section>
 
     <!-- ================================================= -->
     <!-- APPOINTMENTS -->
@@ -4839,6 +4568,12 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 }
 
 
+
+/* =========================================================
+   M1–M4 SEPARATED WORKSPACE STYLES
+   ========================================================= */
+.milestone-page{padding-bottom:30px}.module-hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;background:linear-gradient(135deg,#101d35,#0b1528);border:1px solid #243a5d;border-radius:18px;padding:22px;margin-bottom:14px;box-shadow:0 18px 42px rgba(0,0,0,.24)}.module-hero h2{margin:5px 0 7px;color:#f6f9ff;font-size:25px}.module-hero p{margin:0;color:#8da4c3;font-size:12px}.module-status{border:1px solid #345071;color:#91a8c9;border-radius:999px;padding:9px 12px;font-size:9px;font-weight:800;white-space:nowrap}.module-status.live-on{border-color:#0ca58f;color:#49e1c1}.module-toolbar{display:flex;justify-content:space-between;gap:16px;align-items:center;background:#0d1930;border:1px solid #243a5e;border-radius:16px;padding:15px 18px;margin-bottom:14px}.module-toolbar h3{margin:4px 0 2px;color:#f3f7ff;font-size:17px}.module-toolbar small{color:#7891b3;font-size:10px}.module-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.module-controls select,.module-controls button{min-height:38px}.module-controls select{min-width:250px}.module-controls button{background:#132540!important;border:1px solid #2a4265!important;color:#dbe7f6!important;border-radius:8px!important;padding:8px 13px!important;font-size:10px!important;font-weight:800!important}.module-controls .primary{background:#2878e6!important;border-color:#2878e6!important;color:#fff!important}.module-controls .critical-btn{background:#5a1823!important;border-color:#9e3342!important;color:#ffc0c8!important}.risk-empty,.monitor-empty,.care-empty{background:#0b1629;border:1px dashed #2c456c;border-radius:16px;padding:52px 18px;text-align:center}.risk-empty-icon,.monitor-empty-icon,.care-empty-icon{width:50px;height:50px;display:grid;place-items:center;margin:0 auto 11px;border-radius:13px;background:#162844;border:1px solid #35537c;color:#75a8ff}.risk-empty h3,.monitor-empty h3,.care-empty h3{margin:0 0 6px;color:#f3f7ff}.risk-empty p,.monitor-empty p,.care-empty p{margin:0;color:#8299ba;font-size:10px}.risk-workspace,.monitor-workspace,.care-workspace{display:flex;flex-direction:column;gap:14px}.risk-score-grid,.monitor-vital-grid,.care-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.risk-score-card,.monitor-vital,.care-stat{background:#0d1930;border:1px solid #243a5f;border-radius:14px;padding:15px}.risk-score-card span,.monitor-vital span,.care-stat span{display:block;color:#7891b3;font-size:8px;text-transform:uppercase;letter-spacing:.8px;font-weight:900}.risk-score-card b,.monitor-vital b,.care-stat b{display:block;color:#f2f7ff;font-size:25px;margin:7px 0 2px}.risk-score-card strong{display:block;color:#4bdcc0;font-size:9px}.risk-score-card small{display:block;color:#7188a8;font-size:8px;margin-top:5px}.risk-score-card.cardio{box-shadow:inset 0 2px 0 #4c86ff}.risk-score-card.diabetes{box-shadow:inset 0 2px 0 #35cf9c}.risk-score-card.privacy{box-shadow:inset 0 2px 0 #a377ff}.risk-score-card.quality{box-shadow:inset 0 2px 0 #f0a63a}.risk-two-col,.monitor-two-col{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}.risk-panel,.trend-panel,.alert-panel,.recommendations-panel,.monitor-flow-panel,.care-history-panel,.care-plan-card{background:#0d1930!important;border-color:#243a5f!important;box-shadow:none!important}.factor-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #203552}.factor-row b{display:block;color:#e3edf9;font-size:10px}.factor-row small{display:block;color:#6f87a8;font-size:8px;margin-top:2px}.factor-row strong{color:#77a7ff;font-size:11px}.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.input-grid div{background:#111f37;border:1px solid #233858;border-radius:9px;padding:10px}.input-grid .wide{grid-column:1/-1}.input-grid span{display:block;color:#7188a8;font-size:8px}.input-grid b{display:block;color:#e5eef8;font-size:10px;margin-top:3px}.recommendation-list{display:grid;gap:7px;color:#adc0d7;font-size:10px;line-height:1.5}.monitor-vital{position:relative}.monitor-vital small{color:#7289a9;font-size:8px}.monitor-vital em{display:inline-block;margin-top:7px;padding:4px 7px;border-radius:999px;font-size:7px;font-style:normal;font-weight:900;background:#182946;color:#a0b7d5}.monitor-vital em.CRITICAL{background:#541722;color:#ff929c}.monitor-vital em.WARNING{background:#544012;color:#ffd56c}.monitor-vital em.NORMAL{background:#0f4239;color:#58dfbf}.trend-chart{width:100%;height:225px;background:#091426;border:1px solid #1f3555;border-radius:11px;margin-top:4px}.trend-chart line{stroke:#1e3454;stroke-width:1}.trend-chart polyline{stroke:#2bd6b0;stroke-width:3;filter:drop-shadow(0 0 5px rgba(43,214,176,.38))}.trend-stats{display:flex;justify-content:space-between;color:#7188a8;font-size:8px;margin-top:8px}.trend-stats b{color:#edf5ff}.panel-head select{background:#10203a!important;color:#dce9f7!important;border:1px solid #2a4262!important;border-radius:7px!important}.monitor-alert{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #203550}.monitor-alert b{color:#ff929c;font-size:8px;margin-right:7px}.monitor-alert span{color:#7289a8;font-size:8px}.monitor-alert p{margin:4px 0 0;color:#c3d2e6;font-size:9px}.monitor-alert button{height:28px;background:#122541;border:1px solid #315178;color:#a8c1e4;border-radius:7px;padding:0 8px;font-size:7px}.flow-steps{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:10px}.flow-steps span{background:#142640;border:1px solid #294464;color:#c8d6e8;border-radius:999px;padding:6px 9px;font-size:8px}.flow-steps i{color:#58759b;font-style:normal}.care-stat-grid{grid-template-columns:repeat(4,1fr)}.care-stat b{color:#5fe1c7}.care-title-row{display:flex;justify-content:space-between;gap:14px}.care-title-row h3{margin:5px 0 3px;color:#eef5ff;font-size:16px}.care-title-row small{color:#7991b1;font-size:8px;line-height:1.5}.care-badges{display:flex;gap:5px}.care-progress-block{margin-top:13px}.care-progress-block>div:first-child{display:flex;justify-content:space-between;color:#7890b1;font-size:8px}.care-progress-block b{color:#dce7f5}.progress-track{height:7px;margin-top:5px;background:#1a2c49;border:1px solid #29415f;border-radius:999px;overflow:hidden}.progress-track i{height:100%;display:block;background:#37d2b2;border-radius:999px}.progress-track.adherence i{background:#6f8cff}.treatment-box{margin-top:14px;padding:11px;border-radius:11px;background:#091426;border:1px solid #203756}.treatment-head{display:flex;justify-content:space-between;color:#b8c9df;font-size:9px}.treatment-head small{display:block;color:#6f86a5;font-size:7px;margin-top:2px}.treatment-action{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #1b2e4a;color:#c1d0e3;font-size:9px}.treatment-action:last-child{border-bottom:0}.treatment-action input{accent-color:#35d4b5}.done-action span{color:#718099;text-decoration:line-through}.care-meta-row{display:flex;gap:18px;flex-wrap:wrap;color:#7086a6;font-size:7px;padding-top:9px;margin-top:9px;border-top:1px solid #1c304d}.care-meta-row b{color:#bdcee2}.care-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.care-actions button{background:#11243f!important;border:1px solid #2a4466!important;color:#a8bdd7!important;border-radius:7px!important;padding:6px 8px!important;font-size:7px!important}.care-actions .danger-btn{color:#ff9da8!important;border-color:#70313f!important}.history-row{display:grid;grid-template-columns:1fr 70px 90px;gap:10px;padding:9px 0;border-bottom:1px solid #1d304d;color:#9db3ce}.history-row b{display:block;color:#dce7f4;font-size:9px}.history-row small{display:block;color:#7288a8;font-size:7px;margin-top:2px}.history-row>span{font-size:8px;align-self:center}.m2-page .pill,.m3-page .pill,.m4-page .pill{background:#142640!important;color:#a8bdd7!important;border-color:#2a4463!important}@media(max-width:1050px){.risk-score-grid,.monitor-vital-grid,.care-stat-grid{grid-template-columns:repeat(2,1fr)}.risk-two-col,.monitor-two-col{grid-template-columns:1fr}.module-toolbar{flex-direction:column;align-items:flex-start}}@media(max-width:650px){.risk-score-grid,.monitor-vital-grid,.care-stat-grid{grid-template-columns:1fr}.module-controls{width:100%}.module-controls select{min-width:0;width:100%}.care-title-row{display:block}.care-badges{margin-top:7px}.history-row{grid-template-columns:1fr}.flow-steps i{display:none}}
+
 `]
 })
 export class ShellComponent {
@@ -4963,6 +4698,33 @@ export class ShellComponent {
   savingAppointment = false;
   todayDate = new Date().toISOString().slice(0,10);
   appointmentForm: any = {patientId:'',date:this.todayDate,time:'',status:'SCHEDULED',reason:'General consultation'};
+
+  // =====================================================
+  // SEPARATE MILESTONE HELPERS
+  // =====================================================
+  ensureModulePatient(id: string) {
+    if (!id || this.selected?.patient?.id === id) return;
+    this.api.get<any>('/patients/' + id).subscribe({
+      next: x => { this.selected = x; this.clinicalPatientId = id; },
+      error: err => console.error('Module patient load failed', err)
+    });
+  }
+
+  selectModulePatient(id: string) { if (id) this.ensureModulePatient(id); }
+
+  selectCarePlanPatient(id: string) {
+    this.carePlanPatientId = id || '';
+    if (!id) { this.carePlans = []; return; }
+    this.ensureModulePatient(id);
+    this.loadCarePlans();
+  }
+
+  loadCriticalMonitoringDemo() {
+    if (!this.monitorPatientId) return;
+    this.stopLiveSimulation();
+    const payload = {patientId:this.monitorPatientId,heartRate:145,systolic:190,diastolic:125,oxygen:84,glucose:320,temperature:40.2,source:'WEARABLE-SIMULATOR'};
+    this.api.post<any>('/vitals', payload).subscribe({next:()=>{this.loadMonitorPatient(this.monitorPatientId);this.loadMonitoring(true);},error:e=>alert(e?.error?.message||'Unable to create monitoring demo reading.')});
+  }
 
   // =====================================================
   // M4 CARE PLAN & TREATMENT
@@ -5126,15 +4888,18 @@ export class ShellComponent {
   navigateTo(id: string) {
     this.tab = id;
     this.sidebarOpen = false;
-
-    if (id === 'clinical' && !this.clinicalPatientId) {
-      const patientId = this.selected?.patient?.id || this.patients[0]?.id;
+    const patientId = this.selected?.patient?.id || this.patients[0]?.id || '';
+    if (id === 'clinical') {
       if (patientId) this.loadClinicalPatient(patientId);
-    }
-    if (id === 'monitoring') {
+    } else if (id === 'aiRisk') {
+      if (patientId) this.ensureModulePatient(patientId);
+    } else if (id === 'monitoring') {
+      if (!this.monitorPatientId && patientId) this.monitorPatientId = patientId;
       this.loadMonitoring(true);
-    } else if (id === 'careplans' && this.carePlanPatientId) {
-      this.loadCarePlans();
+      if (this.monitorPatientId) this.loadMonitorPatient(this.monitorPatientId, true);
+    } else if (id === 'careplans') {
+      if (!this.carePlanPatientId && patientId) this.carePlanPatientId = patientId;
+      if (this.carePlanPatientId) this.loadCarePlans();
     } else if (id === 'alerts') {
       this.refresh();
     }

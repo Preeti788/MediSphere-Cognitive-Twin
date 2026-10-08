@@ -1,5 +1,6 @@
 package com.medisphere.api;
 
+import com.medisphere.ai.AiRiskM2Service;
 import com.medisphere.model.Models.*;
 import com.medisphere.repo.*;
 import com.medisphere.monitoring.MonitoringService;
@@ -22,15 +23,16 @@ public class MediSphereController {
     private final CarePlanRepo carePlans; private final MedicineRepo medicines; private final UserRepo users; private final AuditRepo audit;
     private final KafkaTemplate<String,Object> kafka; private final String topic;
     private final MonitoringService monitoring;
+    private final AiRiskM2Service aiRiskM2Service;
     private final MongoTemplate mongoTemplate;
 
     public MediSphereController(PatientRepo patients,VitalRepo vitals,LabRepo labs,AppointmentRepo appointments,
       ConsentRepo consents,AlertRepo alerts,CarePlanRepo carePlans,MedicineRepo medicines,UserRepo users,
       AuditRepo audit,KafkaTemplate<String,Object> kafka,@Value("${medisphere.kafka-topic}") String topic,
-      MonitoringService monitoring, MongoTemplate mongoTemplate){
+      MonitoringService monitoring, AiRiskM2Service aiRiskM2Service, MongoTemplate mongoTemplate){
       this.patients=patients;this.vitals=vitals;this.labs=labs;this.appointments=appointments;this.consents=consents;
       this.alerts=alerts;this.carePlans=carePlans;this.medicines=medicines;this.users=users;this.audit=audit;
-      this.kafka=kafka;this.topic=topic;this.monitoring=monitoring;this.mongoTemplate=mongoTemplate;
+      this.kafka=kafka;this.topic=topic;this.monitoring=monitoring;this.aiRiskM2Service=aiRiskM2Service;this.mongoTemplate=mongoTemplate;
     }
 
     @GetMapping("/dashboard")
@@ -130,18 +132,7 @@ public class MediSphereController {
 
     @PostMapping("/ai/risk/{patientId}")
     public Map<String,Object> risk(@PathVariable String patientId){
-      var vs=vitals.findTop20ByPatientIdOrderByRecordedAtDesc(patientId);
-      double score=0; List<String> factors=new ArrayList<>();
-      if(!vs.isEmpty()){
-        var v=vs.get(0);
-        if(v.heartRate!=null && v.heartRate>100){score+=25;factors.add("Elevated heart rate");}
-        if(v.systolic!=null && v.systolic>140){score+=30;factors.add("Elevated systolic blood pressure");}
-        if(v.oxygen!=null && v.oxygen<95){score+=30;factors.add("Reduced oxygen saturation");}
-        if(v.glucose!=null && v.glucose>140){score+=15;factors.add("Elevated glucose");}
-      }
-      String level=score>=60?"HIGH":score>=30?"MODERATE":"LOW";
-      return Map.of("patientId",patientId,"riskType","CARDIOVASCULAR_DEMO","score",Math.min(score,100),"level",level,
-        "explanations",factors,"note","Demo explainable risk engine; not a clinical diagnosis.");
+      return aiRiskM2Service.predict(patientId);
     }
 
     @GetMapping("/smart/authorize") public Map<String,Object> smartAuthorize(@RequestParam String client_id,@RequestParam String redirect_uri){

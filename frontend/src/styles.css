@@ -17,46 +17,26 @@ html,body{margin:0;min-height:100%;background:#07101d;color:#edf4ff;font-family:
 @media(max-width:800px){.clinical-app .clinical-sidebar{width:72px!important;min-width:72px!important}.clinical-app .clinical-logo>div,.clinical-app .sidebar-label,.clinical-app .nav-item>span:not(.nav-icon):not(.nav-arrow),.clinical-app .sidebar-user>div:not(.doctor-avatar-small),.clinical-app .logout-btn span{display:none!important}.clinical-app .clinical-topbar{display:block!important;padding:12px 15px!important}.clinical-app .milestone-strip{overflow:auto;margin:10px 0}.clinical-app .topbar-actions{justify-content:stretch;flex-wrap:wrap}.clinical-app .clinical-search{width:100%}.clinical-app .content{padding:16px!important}.clinical-app .careplans-page .care-toolbar{display:block}.clinical-app .cards{grid-template-columns:1fr 1fr!important}.clinical-app .risk-body{grid-template-columns:100px 1fr}.clinical-app .risk-ring{width:90px;height:90px}}
 @media(max-width:520px){.clinical-app .clinical-sidebar{width:58px!important;min-width:58px!important}.clinical-app .cards{grid-template-columns:1fr!important}.clinical-app .dashboard-reference{gap:10px}.clinical-app .ecg-stats{grid-template-columns:1fr 1fr}.clinical-app .risk-body{grid-template-columns:1fr}.clinical-app .risk-ring{margin:auto}}
 
-/* Patient 360 dark readability fix — values must remain clearly visible on dark cards */
-.clinical-app .twin-panel,
-.clinical-app .fhir-preview,
-.clinical-app .complete-info{
-  background:#0d1728!important;
-  color:#edf4ff!important;
-  border-color:#22334d!important;
-}
-.clinical-app .twin-grid>div,
-.clinical-app .fhir-info>div,
-.clinical-app .info-grid>div{
-  background:#111d31!important;
-  border:1px solid #29405e!important;
-  color:#edf4ff!important;
-  box-shadow:none!important;
-}
-.clinical-app .twin-grid b,
-.clinical-app .fhir-info b,
-.clinical-app .info-grid b{
-  color:#8fa5bb!important;
-}
-.clinical-app .twin-grid span,
-.clinical-app .fhir-info span,
-.clinical-app .info-grid span{
-  color:#f4f8ff!important;
-  font-weight:800!important;
-}
-.clinical-app .fhir-preview,
-.clinical-app .complete-info{
-  border-top:1px solid #29405e!important;
-}
-.clinical-app .twin-grid .success-text{
-  color:#52d1b4!important;
-}
-
-/* Keep Patient 360 profile details highly readable in dark mode */
-.clinical-app .profile .profile-info h2,
-.clinical-app .profile .profile-info p{
-  color:#f4f8ff!important;
-}
-.clinical-app .profile .profile-info p{
-  color:#8ea2bb!important;
-}
+/* Dashboard is an overview only: detailed milestone results live on their own pages. */
+.dashboard-overview-only .dashboard-purpose-card { margin-top: 18px; }
+.dashboard-module-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.dashboard-module-card { display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center; width:100%; text-align:left; padding:18px; border:1px solid rgba(110,145,190,.25); border-radius:14px; background:rgba(15,27,49,.86); color:#f4f8ff; cursor:pointer; transition:transform .15s ease,border-color .15s ease,background .15s ease; }
+.dashboard-module-card:hover { transform:translateY(-1px); border-color:rgba(65,204,191,.55); background:rgba(20,36,63,.96); }
+.dashboard-module-card h3 { margin:0 0 5px; font-size:16px; }
+.dashboard-module-card p { margin:0; color:#9eb0c8; font-size:12px; line-height:1.45; }
+.dashboard-module-card > b { color:#55d6c4; font-size:12px; white-space:nowrap; }
+.module-badge { width:42px; height:42px; display:grid; place-items:center; border-radius:12px; font-weight:800; font-size:13px; background:#182d4d; color:#fff; border:1px solid rgba(255,255,255,.12); }
+.module-badge.m1 { background:#193a55; }
+.module-badge.m2 { background:#2d2955; }
+.module-badge.m3 { background:#173f3c; }
+.module-badge.m4 { background:#4a3520; }
+.dashboard-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+.dashboard-summary-list { display:grid; gap:10px; }
+.dashboard-summary-list > div { display:flex; justify-content:space-between; align-items:center; padding:13px 14px; border:1px solid rgba(110,145,190,.18); border-radius:10px; background:rgba(9,20,38,.6); }
+.dashboard-summary-list span { color:#a9bad0; font-size:12px; }
+.dashboard-summary-list b { color:#fff; font-size:18px; }
+.dashboard-selected-patient { display:flex; align-items:center; gap:12px; padding:12px; border:1px solid rgba(110,145,190,.18); border-radius:10px; background:rgba(9,20,38,.6); }
+.dashboard-selected-patient > div:nth-child(2) { flex:1; }
+.dashboard-selected-patient small { display:block; color:#8fa4bf; margin-top:3px; }
+.dashboard-selected-patient button { background:#eaf8f6; color:#0f665d; border:0; border-radius:8px; padding:9px 12px; font-weight:700; cursor:pointer; }
+@media (max-width: 900px) { .dashboard-module-grid,.dashboard-two-col { grid-template-columns:1fr; } }
